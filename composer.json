@@ -1,0 +1,21 @@
+{
+  "name": "vapehaus/api",
+  "description": "Vapehaus E-Commerce MVP RESTful API",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.1 || ^8.2 || ^8.3",
+    "ext-pdo": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "Vapehaus\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Vapehaus\\Tests\\": "tests/"
+    }
+  }
+}
