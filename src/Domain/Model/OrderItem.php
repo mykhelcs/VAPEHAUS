@@ -103,13 +103,17 @@ final class OrderItem
         return [
             'id' => $this->id,
             'variant_id' => $this->variantId,
+            'variantId' => $this->variantId,
             'name' => $this->snapshottedName,
+            'productName' => $this->snapshottedName,
             'sku' => $this->snapshottedSku,
             'flavor' => $this->snapshottedFlavor,
             'nicotine' => $this->snapshottedNicotine,
             'unit_price' => $this->unitPrice->toFloat(),
+            'price' => $this->unitPrice->toFloat(),
             'quantity' => $this->quantity,
             'total_price' => $this->totalPrice->toFloat(),
+            'totalPrice' => $this->totalPrice->toFloat(),
             'total_price_formatted' => sprintf('%s %.2f', $this->totalPrice->getCurrency(), $this->totalPrice->toFloat()),
         ];
     }

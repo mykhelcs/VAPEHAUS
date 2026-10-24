@@ -346,31 +346,15 @@ class VapehausStore {
       throw new Error('Please enter your password.');
     }
 
-    // Role-based credential lookup
-    let user = (this.state.users || []).find((u) => u.email.toLowerCase() === cleanEmail);
+    // Look up user in the registered users list only
+    const user = (this.state.users || []).find((u) => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
-      if (cleanEmail === CONFIG.DEFAULT_ADMIN.email.toLowerCase()) {
-        user = { ...CONFIG.DEFAULT_ADMIN };
-      } else if (cleanEmail === CONFIG.DEFAULT_USER.email.toLowerCase()) {
-        user = { ...CONFIG.DEFAULT_USER };
-      } else {
-        // Fallback user creation
-        const isAdmin = cleanEmail.includes('admin');
-        user = {
-          id: 'usr_' + Math.random().toString(36).substring(2, 9),
-          email: cleanEmail,
-          firstName: cleanEmail.split('@')[0],
-          lastName: isAdmin ? 'Admin' : 'Customer',
-          phone: '+63 917 000 0000',
-          role: isAdmin ? 'admin' : 'customer',
-          isAgeVerified: true,
-        };
-        if (!this.state.users) this.state.users = [];
-        this.state.users.push(user);
-      }
+      throw new Error('No account found with that email address.');
     }
 
+    // NOTE: When API is connected, password verification is handled server-side.
+    // Client-side login only sets session state after the server returns a valid token.
     this.state.currentUser = user;
     this.save();
     return user;
@@ -420,6 +404,36 @@ class VapehausStore {
 
   logout() {
     this.state.currentUser = null;
+    this.save();
+  }
+
+  /**
+   * Called by ApiClient after a successful server-side auth response.
+   * Sets the session from the API-returned user object so UI components
+   * reflect the real server user rather than the local seed.
+   */
+  setSessionFromApi(apiUser) {
+    if (!apiUser || !apiUser.email) return;
+    // Merge into or upsert the users list
+    const idx = (this.state.users || []).findIndex(
+      (u) => u.email.toLowerCase() === apiUser.email.toLowerCase()
+    );
+    const normalised = {
+      id: apiUser.id || ('usr_' + Math.random().toString(36).substring(2, 9)),
+      email: apiUser.email.toLowerCase(),
+      firstName: apiUser.firstName || apiUser.first_name || apiUser.email.split('@')[0],
+      lastName: apiUser.lastName || apiUser.last_name || '',
+      phone: apiUser.phone || '',
+      role: apiUser.role || 'customer',
+      isAgeVerified: !!(apiUser.isAgeVerified || apiUser.is_age_verified),
+    };
+    if (idx >= 0) {
+      this.state.users[idx] = normalised;
+    } else {
+      if (!this.state.users) this.state.users = [];
+      this.state.users.push(normalised);
+    }
+    this.state.currentUser = normalised;
     this.save();
   }
 

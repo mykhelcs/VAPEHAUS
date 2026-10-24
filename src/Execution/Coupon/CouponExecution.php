@@ -113,23 +113,40 @@ final class CouponExecution
      */
     public function adminCreate(array $data): array
     {
-        $code = strtoupper(trim($data['code'] ?? ''));
+        $code = strtoupper(trim((string) ($data['code'] ?? '')));
+        if ($code === '') {
+            throw new ValidationException('Coupon code is required.');
+        }
+
         $existing = $this->couponRepo->findByCode($code);
         if ($existing !== null) {
             throw new ValidationException("Coupon code '{$code}' already exists.");
         }
 
+        $value = (float) ($data['value'] ?? $data['discountPercent'] ?? $data['discount_percent'] ?? 0.0);
+        $type = (string) ($data['type'] ?? 'percentage');
+        if (isset($data['discountPercent']) && !isset($data['type'])) {
+            $type = 'percentage';
+        }
+
+        $minSpend = (float) ($data['min_spend'] ?? $data['minSpend'] ?? 0.0);
+        $maxDiscount = isset($data['max_discount']) && $data['max_discount'] !== null
+            ? (float) $data['max_discount']
+            : (isset($data['maxDiscount']) ? (float) $data['maxDiscount'] : null);
+        $usageLimit = (int) ($data['usage_limit'] ?? $data['maxUses'] ?? $data['max_uses'] ?? 500);
+        $expiresAt = $data['expires_at'] ?? $data['expiryDate'] ?? $data['expiry'] ?? null;
+
         $id = 'cpn_' . bin2hex(random_bytes(6));
         $coupon = new Coupon(
             $id,
             $code,
-            $data['type'] ?? 'percentage',
-            (float) ($data['value'] ?? 0),
-            Money::fromFloat((float) ($data['min_spend'] ?? 0)),
-            isset($data['max_discount']) && $data['max_discount'] !== null ? Money::fromFloat((float) $data['max_discount']) : null,
-            (int) ($data['usage_limit'] ?? 0),
+            $type,
+            $value,
+            Money::fromFloat($minSpend),
+            $maxDiscount !== null ? Money::fromFloat($maxDiscount) : null,
+            $usageLimit,
             0,
-            $data['expires_at'] ?? null,
+            $expiresAt,
             true
         );
 

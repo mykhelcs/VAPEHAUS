@@ -36,22 +36,16 @@ const CheckoutModal = {
       }
     });
 
-    // Default pre-fill with customer Juan Dela Cruz
-    this.prefillDefaultCustomer();
+    // Pre-fill contact info from session user if available
+    this.prefillFromSession();
   },
 
-  prefillDefaultCustomer() {
-    const user = Store.getState().currentUser;
+  prefillFromSession() {
+    const user = Store.getCurrentUser();
+    if (!user) return;
     this.formData.customerName = `${user.firstName} ${user.lastName}`;
     this.formData.customerEmail = user.email;
-    this.formData.customerPhone = user.phone;
-    this.formData.addressLine1 = 'Unit 12B, Emerald Tower, F. Ortigas Jr. Rd';
-    this.formData.barangay = 'San Antonio';
-    this.formData.city = 'Pasig City';
-    this.formData.province = 'Metro Manila';
-    this.formData.postalCode = '1605';
-    this.formData.deliveryNotes = 'Leave with building reception or concierge.';
-    this.formData.isAgeAttested = true;
+    this.formData.customerPhone = user.phone || '';
   },
 
   open() {
@@ -135,11 +129,8 @@ const CheckoutModal = {
 
     bodyEl.innerHTML = `
       <div class="checkout-header">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2 style="font-size: 1.4rem;">Checkout & Delivery</h2>
-          <button class="btn btn-secondary btn-sm" onclick="CheckoutModal.prefillDefaultCustomer(); CheckoutModal.render();">
-            ⚡ Autofill Demo Customer
-          </button>
+        <div style="display: flex; justify-content: center; align-items: center;">
+          <h2 style="font-size: 1.4rem;">Checkout &amp; Delivery</h2>
         </div>
 
         <!-- Step Indicator Bar -->
@@ -316,7 +307,7 @@ const CheckoutModal = {
     `;
   },
 
-  submitOrder() {
+  async submitOrder() {
     this.saveCurrentInputs();
 
     if (!this.formData.isAgeAttested) {
@@ -326,17 +317,30 @@ const CheckoutModal = {
 
     const fullAddress = `${this.formData.addressLine1}, ${this.formData.barangay ? this.formData.barangay + ', ' : ''}${this.formData.city}, ${this.formData.province} ${this.formData.postalCode}`;
 
+    const submitBtn = document.querySelector('.btn-place-order');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Placing order…'; }
+
     try {
-      const order = Store.placeOrder({
+      const result = await Api.checkout({
         customerName: this.formData.customerName,
         customerEmail: this.formData.customerEmail,
         customerPhone: this.formData.customerPhone,
         shippingAddress: fullAddress,
+        shippingCity: this.formData.city,
+        shippingProvince: this.formData.province,
+        shippingZip: this.formData.postalCode,
         deliveryNotes: this.formData.deliveryNotes,
+        shippingMethod: this.formData.shippingMethod,
         paymentMethod: this.formData.paymentMethod,
         isAgeAttested: this.formData.isAgeAttested,
       });
 
+      if (!result.success) {
+        Toast.error(result.error.message || 'Checkout failed. Please try again.');
+        return;
+      }
+
+      const order = result.data;
       Toast.success(`Order #${order.orderNumber} placed successfully!`);
       this.close();
 
@@ -344,7 +348,9 @@ const CheckoutModal = {
         OrderTrackerModal.showOrder(order.id);
       }
     } catch (err) {
-      Toast.error(err.message);
+      Toast.error(err.message || 'An unexpected error occurred during checkout.');
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
     }
   },
 };

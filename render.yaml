@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: vapehaus-prod
+    runtime: php
+    region: singapore
+    branch: main
+    buildCommand: composer install --no-dev --optimize-autoloader
+    startCommand: php -S 0.0.0.0:$PORT -t public
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_DRIVER
+        value: pgsql
+      - key: SESSION_LIFETIME_HOURS
+        value: 24
+      - key: SHIPPING_STANDARD_FEE
+        value: 150
+      - key: SHIPPING_EXPRESS_FEE
+        value: 250
+      - key: SHIPPING_FREE_THRESHOLD
+        value: 1500

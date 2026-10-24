@@ -61,13 +61,14 @@ final class PdoNotificationService implements NotificationServiceInterface
     private function log(string $recipient, string $channel, string $subject, string $body): void
     {
         $stmt = $this->pdo->prepare('INSERT INTO notifications_log (id, recipient, channel, subject, body, sent_at)
-            VALUES (:id, :to, :ch, :sub, :body, datetime("now"))');
+            VALUES (:id, :to, :ch, :sub, :body, :sent_at)');
         $stmt->execute([
             ':id' => 'notif_' . bin2hex(random_bytes(6)),
             ':to' => $recipient,
             ':ch' => $channel,
             ':sub' => $subject,
             ':body' => $body,
+            ':sent_at' => date('Y-m-d H:i:s'),
         ]);
     }
 }

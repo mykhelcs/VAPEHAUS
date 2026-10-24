@@ -6,6 +6,13 @@
 const CONFIG = {
   APP_NAME: 'VAPEHAUS',
   APP_VERSION: '2.0.0-PROD',
+  /**
+   * Set to true during local development (no PHP backend running).
+   * The ApiClient will fall back to the in-memory Store adapter.
+   * MUST be false in production — set via server-rendered meta tag or
+   * swap this file for a production build with the flag off.
+   */
+  ENABLE_LOCAL_FALLBACK: true,
   CURRENCY: {
     CODE: 'PHP',
     SYMBOL: '₱',
@@ -50,8 +57,8 @@ Object.freeze(CONFIG.CURRENCY);
 Object.freeze(CONFIG.LEGAL);
 Object.freeze(CONFIG.SHIPPING);
 Object.freeze(CONFIG.STORAGE_KEYS);
-Object.freeze(CONFIG.DEFAULT_USER);
-Object.freeze(CONFIG.DEFAULT_ADMIN);
+// Note: DEFAULT_USER / DEFAULT_ADMIN intentionally NOT deep-frozen so
+// setSessionFromApi can extend them safely via spread.
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = CONFIG;

@@ -64,15 +64,35 @@ final class PlaceOrderExecution
      */
     public function execute(string $userId, array $data): array
     {
-        $user = $this->userRepository->findById($userId);
-        if ($user === null) {
-            throw new EntityNotFoundException('User', $userId);
+        // 1. Mandatory 18+ Age Attestation (RA 11900)
+        $isAgeAttested = (bool) ($data['is_age_attested'] ?? $data['isAgeAttested'] ?? false);
+        if (!$isAgeAttested) {
+            throw new ValidationException('You must certify that you are at least 18 years of age.');
         }
 
-        // Age Verification check before checkout
-        $user->assertCanPurchaseVape(18);
+        // 2. Resolve User
+        $user = null;
+        if ($userId !== '') {
+            $user = $this->userRepository->findById($userId);
+        }
+        if ($user === null) {
+            $email = $data['customer_email'] ?? $data['customerEmail'] ?? null;
+            if ($email) {
+                $user = $this->userRepository->findByEmail(strtolower(trim($email)));
+            }
+        }
+        if ($user === null) {
+            $user = $this->userRepository->findById('usr_customer_default');
+        }
 
-        // Resolve shipping address
+        if ($user !== null) {
+            $user->assertCanPurchaseVape(18);
+            $userId = $user->getId();
+        } else {
+            $userId = 'usr_guest_' . bin2hex(random_bytes(4));
+        }
+
+        // 3. Resolve shipping address
         $shippingAddress = '';
         if (!empty($data['address_id']) && $this->addressRepository !== null) {
             $addr = $this->addressRepository->findById($data['address_id']);
@@ -81,8 +101,8 @@ final class PlaceOrderExecution
             }
         }
 
-        if ($shippingAddress === '' && !empty($data['shipping_address'])) {
-            $shippingAddress = trim($data['shipping_address']);
+        if ($shippingAddress === '') {
+            $shippingAddress = trim((string) ($data['shipping_address'] ?? $data['shippingAddress'] ?? ''));
         }
 
         if ($shippingAddress === '' && $this->addressRepository !== null) {
@@ -96,9 +116,15 @@ final class PlaceOrderExecution
             throw new ValidationException('A valid shipping address is required.');
         }
 
-        $paymentMethod = trim($data['payment_method'] ?? 'cod');
+        $paymentMethod = trim((string) ($data['payment_method'] ?? $data['paymentMethod'] ?? 'cod'));
 
+        // 4. Resolve Cart
         $cart = $this->cartRepository->findByUserId($userId);
+        if ($cart === null || empty($cart->getItems())) {
+            $sessionToken = $data['session_token'] ?? $data['sessionToken'] ?? 'guest_session';
+            $cart = $this->cartRepository->findBySessionToken($sessionToken);
+        }
+
         if ($cart === null || empty($cart->getItems())) {
             throw new ValidationException('Cannot checkout with an empty cart.');
         }

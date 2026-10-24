@@ -68,18 +68,7 @@ const AuthModal = {
     }
   },
 
-  fillDemo(type) {
-    const emailEl = document.getElementById('auth-login-email');
-    const passEl = document.getElementById('auth-login-password');
-    if (type === 'admin') {
-      if (emailEl) emailEl.value = 'admin@vapehaus.ph';
-      if (passEl) passEl.value = 'AdminPass123!';
-    } else {
-      if (emailEl) emailEl.value = 'customer@vapehaus.ph';
-      if (passEl) passEl.value = 'VapePass123!';
-    }
-    Toast.info(`Filled ${type.toUpperCase()} demo credentials.`);
-  },
+
 
   calculateAge(birthDateStr) {
     if (!birthDateStr) return 0;
@@ -135,12 +124,6 @@ const AuthModal = {
   renderLoginForm() {
     return `
       <form onsubmit="AuthModal.handleLoginSubmit(event)">
-        <div class="demo-auth-pill-bar">
-          <span style="font-size: 0.78rem; color: var(--text-muted);">Quick Demo Fill:</span>
-          <button type="button" class="demo-pill-btn" onclick="AuthModal.fillDemo('customer')">👤 Customer Demo</button>
-          <button type="button" class="demo-pill-btn" onclick="AuthModal.fillDemo('admin')">⚡ Admin Demo</button>
-        </div>
-
         <div class="input-group">
           <label class="input-label">Email Address <span class="required">*</span></label>
           <input type="email" id="auth-login-email" class="input-control" placeholder="you@domain.ph" required>
@@ -242,35 +225,44 @@ const AuthModal = {
     `;
   },
 
-  handleLoginSubmit(e) {
+  async handleLoginSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('auth-login-email').value.trim();
     const password = document.getElementById('auth-login-password').value;
 
+    const submitBtn = e.target.querySelector('[type=submit]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
+
     try {
-      const user = Store.login(email, password);
+      const result = await Api.login(email, password);
+
+      if (!result.success) {
+        Toast.error(result.error.message || 'Invalid email or password.');
+        return;
+      }
+
+      const user = result.data.user;
       this.close();
 
       // ROLE-BASED ACCESS CONTROL (RBAC) REDIRECTION:
       if (user.role === 'admin') {
-        Toast.success(`Admin authorized: ${user.firstName}. Redirecting to Admin Dashboard...`);
-        setTimeout(() => {
-          window.location.href = 'admin.html';
-        }, 600);
+        Toast.success(`Admin authorized: ${user.firstName}. Redirecting to Admin Dashboard…`);
+        setTimeout(() => { window.location.href = 'admin.html'; }, 600);
       } else {
         Toast.success(`Welcome back, ${user.firstName}! Signed in as Customer.`);
         this.updateHeaderAuthStatus();
-        // If on admin page, redirect customer to storefront
         if (window.location.pathname.includes('admin.html')) {
           window.location.href = 'index.html';
         }
       }
     } catch (err) {
-      Toast.error(err.message);
+      Toast.error(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign In to VAPEHAUS →'; }
     }
   },
 
-  handleRegisterSubmit(e) {
+  async handleRegisterSubmit(e) {
     e.preventDefault();
     const firstName = document.getElementById('reg-fname').value.trim();
     const lastName = document.getElementById('reg-lname').value.trim();
@@ -286,22 +278,26 @@ const AuthModal = {
       return;
     }
 
+    const submitBtn = e.target.querySelector('[type=submit]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating account…'; }
+
     try {
-      const user = Store.register({
-        firstName,
-        lastName,
-        email,
-        phone,
-        birthDate,
-        password,
-        isAgeAttested,
+      const result = await Api.register({
+        firstName, lastName, email, phone, birthDate, password, isAgeAttested,
       });
 
-      Toast.success(`Account registered! Welcome to VAPEHAUS, ${user.firstName}.`);
+      if (!result.success) {
+        Toast.error(result.error.message || 'Registration failed.');
+        return;
+      }
+
+      Toast.success(`Account registered! Welcome to VAPEHAUS, ${result.data.user.firstName}.`);
       this.close();
       this.updateHeaderAuthStatus();
     } catch (err) {
-      Toast.error(err.message);
+      Toast.error(err.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create 18+ Verified Account'; }
     }
   },
 

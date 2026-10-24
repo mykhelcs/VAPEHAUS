@@ -272,6 +272,17 @@ final class SchemaManager
                 subject VARCHAR(200) NOT NULL,
                 body TEXT NOT NULL,
                 sent_at DATETIME NOT NULL
+            );",
+
+            // 18. Server Sessions (Bearer tokens)
+            "CREATE TABLE IF NOT EXISTS sessions (
+                token VARCHAR(128) PRIMARY KEY,
+                user_id VARCHAR(64) NOT NULL,
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );"
         ];
 
@@ -283,13 +294,14 @@ final class SchemaManager
     public function seedDefaults(): void
     {
         $hasher = new PasswordHasher();
+        $now = date('Y-m-d H:i:s');
 
         // 1. Seed Admin
         $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM users WHERE email = :email');
         $stmt->execute([':email' => 'admin@vapehaus.ph']);
         if ($stmt->fetchColumn() == 0) {
             $stmt = $this->pdo->prepare('INSERT INTO users (id, email, password_hash, first_name, last_name, phone, role, birth_date, is_age_verified, created_at)
-                VALUES (:id, :email, :hash, :first, :last, :phone, :role, :dob, :verified, datetime("now"))');
+                VALUES (:id, :email, :hash, :first, :last, :phone, :role, :dob, :verified, :created)');
             $stmt->execute([
                 ':id' => 'usr_admin_default',
                 ':email' => 'admin@vapehaus.ph',
@@ -300,6 +312,7 @@ final class SchemaManager
                 ':role' => 'admin',
                 ':dob' => '1990-01-01',
                 ':verified' => 1,
+                ':created' => $now,
             ]);
         }
 
@@ -308,7 +321,7 @@ final class SchemaManager
         $stmt->execute([':email' => 'customer@vapehaus.ph']);
         if ($stmt->fetchColumn() == 0) {
             $stmt = $this->pdo->prepare('INSERT INTO users (id, email, password_hash, first_name, last_name, phone, role, birth_date, is_age_verified, created_at)
-                VALUES (:id, :email, :hash, :first, :last, :phone, :role, :dob, :verified, datetime("now"))');
+                VALUES (:id, :email, :hash, :first, :last, :phone, :role, :dob, :verified, :created)');
             $stmt->execute([
                 ':id' => 'usr_customer_default',
                 ':email' => 'customer@vapehaus.ph',
@@ -319,11 +332,12 @@ final class SchemaManager
                 ':role' => 'customer',
                 ':dob' => '1998-05-15',
                 ':verified' => 1,
+                ':created' => $now,
             ]);
 
             // Seed default address for customer
             $addrStmt = $this->pdo->prepare('INSERT INTO user_addresses (id, user_id, label, recipient_name, phone, address_line1, address_line2, city, province, postal_code, is_default, created_at)
-                VALUES (:id, :uid, :lbl, :name, :ph, :a1, :a2, :city, :prov, :zip, 1, datetime("now"))');
+                VALUES (:id, :uid, :lbl, :name, :ph, :a1, :a2, :city, :prov, :zip, 1, :created)');
             $addrStmt->execute([
                 ':id' => 'addr_customer_default',
                 ':uid' => 'usr_customer_default',
@@ -335,6 +349,7 @@ final class SchemaManager
                 ':city' => 'Pasig City',
                 ':prov' => 'Metro Manila',
                 ':zip' => '1605',
+                ':created' => $now,
             ]);
         }
 
@@ -410,7 +425,7 @@ final class SchemaManager
             $check->execute([':id' => $p['id']]);
             if ($check->fetchColumn() == 0) {
                 $ins = $this->pdo->prepare('INSERT INTO products (id, category_id, name, slug, brand, description, average_rating, review_count, is_active, created_at)
-                    VALUES (:id, :cid, :name, :slug, :brand, :desc, :rating, :revs, 1, datetime("now"))');
+                    VALUES (:id, :cid, :name, :slug, :brand, :desc, :rating, :revs, 1, :created)');
                 $ins->execute([
                     ':id' => $p['id'],
                     ':cid' => $p['category_id'],
@@ -420,6 +435,7 @@ final class SchemaManager
                     ':desc' => $p['description'],
                     ':rating' => $p['rating'] ?? 0.0,
                     ':revs' => $p['reviews'] ?? 0,
+                    ':created' => $now,
                 ]);
 
                 foreach ($p['variants'] as $v) {
@@ -440,6 +456,15 @@ final class SchemaManager
 
         // 5. Seed Promotional Coupons
         $coupons = [
+            [
+                'id' => 'cpn_haus10',
+                'code' => 'HAUS10',
+                'type' => 'percentage',
+                'value' => 10.00,
+                'min_spend' => 0.00,
+                'max_discount' => null,
+                'usage_limit' => 10000,
+            ],
             [
                 'id' => 'cpn_welcome10',
                 'code' => 'WELCOME10',
@@ -469,12 +494,14 @@ final class SchemaManager
             ],
         ];
 
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days'));
+
         foreach ($coupons as $cpn) {
             $check = $this->pdo->prepare('SELECT COUNT(*) FROM coupons WHERE code = :code');
             $check->execute([':code' => $cpn['code']]);
             if ($check->fetchColumn() == 0) {
                 $ins = $this->pdo->prepare('INSERT INTO coupons (id, code, type, value, min_spend, max_discount, usage_limit, times_used, expires_at, is_active, created_at)
-                    VALUES (:id, :code, :type, :val, :min, :max, :limit, 0, datetime("now", "+30 days"), 1, datetime("now"))');
+                    VALUES (:id, :code, :type, :val, :min, :max, :limit, 0, :exp, 1, :created)');
                 $ins->execute([
                     ':id' => $cpn['id'],
                     ':code' => $cpn['code'],
@@ -483,6 +510,8 @@ final class SchemaManager
                     ':min' => $cpn['min_spend'],
                     ':max' => $cpn['max_discount'],
                     ':limit' => $cpn['usage_limit'],
+                    ':exp' => $expiresAt,
+                    ':created' => $now,
                 ]);
             }
         }

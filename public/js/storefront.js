@@ -450,7 +450,7 @@ const AdminActionModals = {
     const modal = document.getElementById('admin-add-product-modal');
     if (modal) modal.classList.remove('open');
   },
-  submitAddProduct(event) {
+  async submitAddProduct(event) {
     if (event) event.preventDefault();
     const name = document.getElementById('admin-new-prod-name').value.trim();
     const brand = document.getElementById('admin-new-prod-brand').value.trim();
@@ -468,7 +468,7 @@ const AdminActionModals = {
     }
 
     try {
-      const product = Store.addProduct({
+      const payload = {
         name,
         brand,
         category,
@@ -481,11 +481,17 @@ const AdminActionModals = {
           originalPrice,
           stock,
         })),
-      });
+      };
 
-      Toast.success(`Product "${product.name}" added to catalog.`);
-      this.closeAddProduct();
-      document.getElementById('admin-add-product-form').reset();
+      const res = await Api.addProduct(payload);
+      if (res && res.success) {
+        Store.addProduct(payload);
+        Toast.success(`Product "${res.data.name || name}" added to catalog.`);
+        this.closeAddProduct();
+        document.getElementById('admin-add-product-form').reset();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to add product');
+      }
     } catch (err) {
       Toast.error(err.message);
     }
@@ -499,7 +505,7 @@ const AdminActionModals = {
     const modal = document.getElementById('admin-create-coupon-modal');
     if (modal) modal.classList.remove('open');
   },
-  submitCreateCoupon(event) {
+  async submitCreateCoupon(event) {
     if (event) event.preventDefault();
     const code = document.getElementById('admin-new-cpn-code').value.trim();
     const percent = parseInt(document.getElementById('admin-new-cpn-percent').value, 10);
@@ -513,17 +519,23 @@ const AdminActionModals = {
     }
 
     try {
-      const coupon = Store.createCoupon({
+      const payload = {
         code,
         discountPercent: percent,
         minSpend,
         maxUses,
         expiryDate: expiry,
-      });
+      };
 
-      Toast.success(`Promo code "${coupon.code}" published successfully (${coupon.discountPercent}% OFF).`);
-      this.closeCreateCoupon();
-      document.getElementById('admin-create-coupon-form').reset();
+      const res = await Api.createCoupon(payload);
+      if (res && res.success) {
+        Store.createCoupon(payload);
+        Toast.success(`Promo code "${res.data.code || code}" published successfully (${percent}% OFF).`);
+        this.closeCreateCoupon();
+        document.getElementById('admin-create-coupon-form').reset();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to create promo code');
+      }
     } catch (err) {
       Toast.error(err.message);
     }

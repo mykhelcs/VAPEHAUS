@@ -339,12 +339,17 @@ const AdminApp = {
     modal.classList.add('open');
   },
 
-  advanceStatus(orderId, targetStatus, metadata = {}) {
+  async advanceStatus(orderId, targetStatus, metadata = {}) {
     try {
-      Store.updateOrderStatus(orderId, targetStatus, metadata);
-      Toast.success(`Status updated to "${OrderStatus.getLabel(targetStatus)}".`);
-      this.openFulfillment(orderId);
-      this.renderOrders();
+      const res = await Api.updateOrderStatus(orderId, targetStatus, metadata);
+      if (res && res.success) {
+        Store.updateOrderStatus(orderId, targetStatus, metadata);
+        Toast.success(`Status updated to "${OrderStatus.getLabel(targetStatus)}".`);
+        this.openFulfillment(orderId);
+        this.renderOrders();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to update order status');
+      }
     } catch (err) {
       Toast.error(err.message);
     }
@@ -403,21 +408,31 @@ const AdminApp = {
     `).join('');
   },
 
-  adjustStock(variantId, delta) {
+  async adjustStock(variantId, delta) {
     try {
-      Store.updateVariantStock(variantId, delta, true);
-      Toast.success('Stock adjusted.');
-      this.renderInventory();
+      const res = await Api.updateStock(variantId, delta, true);
+      if (res && res.success) {
+        Store.updateVariantStock(variantId, delta, true);
+        Toast.success('Stock adjusted.');
+        this.renderInventory();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to adjust stock');
+      }
     } catch (err) {
       Toast.error(err.message);
     }
   },
 
-  setStock(variantId, newStock) {
+  async setStock(variantId, newStock) {
     try {
-      Store.updateVariantStock(variantId, newStock, false);
-      Toast.success('Stock updated.');
-      this.renderInventory();
+      const res = await Api.updateStock(variantId, parseInt(newStock, 10), false);
+      if (res && res.success) {
+        Store.updateVariantStock(variantId, newStock, false);
+        Toast.success('Stock updated.');
+        this.renderInventory();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to update stock');
+      }
     } catch (err) {
       Toast.error(err.message);
     }
@@ -493,23 +508,41 @@ const AdminApp = {
     `).join('');
   },
 
-  approveKyc(id) {
-    const req = Store.getState().kycRequests.find((k) => k.id === id);
-    if (req) {
-      req.status = 'approved';
-      Store.save();
-      Toast.success('KYC Approved.');
-      this.renderKyc();
+  async approveKyc(id) {
+    try {
+      const res = await Api.reviewKyc(id, 'approved');
+      if (res && res.success) {
+        const req = (Store.getState().kycRequests || []).find((k) => k.id === id);
+        if (req) {
+          req.status = 'approved';
+          Store.save();
+        }
+        Toast.success('KYC Approved.');
+        this.renderKyc();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to approve KYC');
+      }
+    } catch (err) {
+      Toast.error(err.message);
     }
   },
 
-  rejectKyc(id) {
-    const req = Store.getState().kycRequests.find((k) => k.id === id);
-    if (req) {
-      req.status = 'rejected';
-      Store.save();
-      Toast.info('KYC Rejected.');
-      this.renderKyc();
+  async rejectKyc(id) {
+    try {
+      const res = await Api.reviewKyc(id, 'rejected');
+      if (res && res.success) {
+        const req = (Store.getState().kycRequests || []).find((k) => k.id === id);
+        if (req) {
+          req.status = 'rejected';
+          Store.save();
+        }
+        Toast.info('KYC Rejected.');
+        this.renderKyc();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to reject KYC');
+      }
+    } catch (err) {
+      Toast.error(err.message);
     }
   },
 
