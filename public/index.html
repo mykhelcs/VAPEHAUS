@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAPEHAUS — Premium Vaping E-Commerce</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/storefront.css">
+</head>
+<body>
+
+  <!-- 18+ Mandatory Age Verification Gate -->
+  <div class="age-gate-overlay" id="age-gate-modal">
+    <div class="age-gate-card">
+      <div class="age-gate-icon">🔞</div>
+      <h2>Are you 18 or older?</h2>
+      <p>
+        VAPEHAUS products contain nicotine, a highly addictive chemical substance. Under Republic Act No. 11900, you must be of legal adult age (18+) to enter this online store.
+      </p>
+      <div class="age-gate-actions">
+        <button class="btn btn-lg" id="btn-age-confirm">I’m 18+ — Enter Store</button>
+        <a class="btn btn-ghost" href="https://www.google.com">Exit Website</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Announcement Bar -->
+  <div class="promo-bar">
+    🚚 Free shipping on orders over ₱1,500 · Use code <span>HAUS10</span> for 10% off
+  </div>
+
+  <!-- Main Store Header -->
+  <header class="store-header">
+    <div class="wrap header-bar">
+      <a class="logo" href="#">VAPE<span>HAUS</span></a>
+
+      <nav class="main-nav" id="store-main-nav">
+        <a href="#hero" class="active">Home</a>
+        <a href="#shop">Catalog</a>
+        <a href="#brands">Brands</a>
+        <a href="#trust">Why Us</a>
+      </nav>
+
+      <!-- Live Search with Typeahead -->
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="store-search-input" placeholder="Search devices, pods, e-liquids…" autocomplete="off">
+        <div class="search-results-dropdown" id="search-dropdown-results"></div>
+      </div>
+
+      <!-- Action Buttons: Login Button on top right near the Cart Icon -->
+      <div class="header-actions">
+        <div id="header-auth-container">
+          <button class="btn-header-auth" onclick="AuthModal.openLogin()" title="Sign In or Register">
+            <span>👤</span>
+            <b>Sign In</b>
+          </button>
+        </div>
+
+        <button class="icon-btn" id="btn-cart-toggle" aria-label="Cart" title="Shopping Cart">
+          🛒
+          <span class="badge-counter" id="cart-badge-counter" style="display: none;">0</span>
+        </button>
+
+        <button class="icon-btn hamburger-btn" id="btn-hamburger-toggle" aria-label="Menu">
+          ☰
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Storefront Content -->
+  <main class="wrap">
+
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+      <div>
+        <span class="hero-tag">NEW ARRIVALS 2026 · AUTHENTIC PHILIPPINES</span>
+        <h1>Elevate Your <em>Vape Experience</em></h1>
+        <p>
+          Discover cutting-edge pod mods, replacement coils, and award-winning e-liquids from the world's most trusted brands. Fast local dispatch with discrete packaging.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-lg" href="#shop">Explore Catalog</a>
+          <button class="btn btn-lg btn-ghost" onclick="CartDrawer.open()">View Cart</button>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-device"></div>
+      </div>
+    </section>
+
+    <!-- Brands Strip -->
+    <div class="brands-strip" id="brands">
+      <span class="brand-pill">VOOPOO</span>
+      <span class="brand-pill">SMOK</span>
+      <span class="brand-pill">GEEKVAPE</span>
+      <span class="brand-pill">UWELL</span>
+      <span class="brand-pill">RELX</span>
+      <span class="brand-pill">NAKED 100</span>
+      <span class="brand-pill">JUICE HEAD</span>
+    </div>
+
+    <!-- Category Chips Carousel -->
+    <div class="category-chips" id="category-chips-bar"></div>
+
+    <!-- Main Catalog Section with Facets -->
+    <section id="shop">
+      <div class="catalog-toolbar">
+        <div class="catalog-counter">
+          Showing <b id="products-count-badge">0</b> premium products
+        </div>
+
+        <div class="catalog-controls">
+          <label style="font-size: 0.85rem; color: var(--text-muted);">Sort by:</label>
+          <select class="sort-select" id="sort-products-select">
+            <option value="featured">Featured Picks</option>
+            <option value="price_asc">Price: Low to High</option>
+            <option value="price_desc">Price: High to Low</option>
+            <option value="rating">Highest Rated</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="catalog-layout">
+        <!-- Facets Sidebar -->
+        <aside class="facet-sidebar">
+          <div class="facet-block">
+            <div class="facet-title">Brand</div>
+            <div class="facet-list">
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="VOOPOO"> Voopoo</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="SMOK"> Smok</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="GEEKVAPE"> Geekvape</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="UWELL"> Uwell</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="RELX"> RELX</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="NAKED 100"> Naked 100</label>
+              <label class="facet-label"><input type="checkbox" class="brand-checkbox" value="JUICE HEAD"> Juice Head</label>
+            </div>
+          </div>
+
+          <div class="facet-block">
+            <div class="facet-title">Nicotine Strength</div>
+            <div class="variant-chips">
+              <span class="variant-chip nicotine-chip" data-nicotine="0mg">0mg</span>
+              <span class="variant-chip nicotine-chip" data-nicotine="3mg">3mg</span>
+              <span class="variant-chip nicotine-chip" data-nicotine="6mg">6mg</span>
+              <span class="variant-chip nicotine-chip" data-nicotine="20mg">20mg</span>
+              <span class="variant-chip nicotine-chip" data-nicotine="30mg">30mg</span>
+              <span class="variant-chip nicotine-chip" data-nicotine="50mg">50mg</span>
+            </div>
+          </div>
+
+          <div class="facet-block">
+            <div class="facet-title">Availability</div>
+            <label class="facet-label">
+              <input type="checkbox" id="facet-instock-toggle">
+              In Stock Only
+            </label>
+          </div>
+        </aside>
+
+        <!-- Product Cards Grid -->
+        <div class="product-grid" id="products-grid-container"></div>
+      </div>
+    </section>
+
+    <!-- Trust & Value Proposition Cards -->
+    <div class="trust-grid" id="trust">
+      <div class="trust-card">
+        <span>⚡</span>
+        <h4>Same-Day Dispatch</h4>
+        <p>Orders before 3PM dispatched same-day via local courier partners.</p>
+      </div>
+      <div class="trust-card">
+        <span>✅</span>
+        <h4>100% Authentic</h4>
+        <p>Sourced directly from certified manufacturers & authorized distributors.</p>
+      </div>
+      <div class="trust-card">
+        <span>🔒</span>
+        <h4>Secure Payments</h4>
+        <p>GCash, Maya, credit cards, and Cash on Delivery supported.</p>
+      </div>
+      <div class="trust-card">
+        <span>💬</span>
+        <h4>Dedicated Support</h4>
+        <p>Prompt after-sales assistance and warranty support 7 days a week.</p>
+      </div>
+    </div>
+
+    <!-- Newsletter -->
+    <div class="newsletter-box">
+      <h2>Join the Haus VIP Club</h2>
+      <p>Be the first to receive exclusive discounts, new hardware drops, and restock notifications.</p>
+      <form class="newsletter-form" onsubmit="event.preventDefault(); this.reset(); Toast.success('Thank you for subscribing to VAPEHAUS drops!');">
+        <input type="email" placeholder="Enter your email..." required>
+        <button class="btn">Subscribe</button>
+      </form>
+    </div>
+
+  </main>
+
+  <!-- Store Footer -->
+  <footer class="store-footer">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div>
+          <div class="logo" style="margin-bottom: 12px;">VAPE<span>HAUS</span></div>
+          <p style="font-size: 0.88rem; line-height: 1.6;">
+            The Philippines' trusted source for authentic vaporizers, closed pod systems, and premium nicotine salts.
+          </p>
+        </div>
+        <div>
+          <h5>Shop Categories</h5>
+          <a href="#shop" onclick="StorefrontApp.setCategory('devices')">Devices & Mods</a>
+          <a href="#shop" onclick="StorefrontApp.setCategory('pod-systems')">Pod Systems</a>
+          <a href="#shop" onclick="StorefrontApp.setCategory('eliquids')">E-Liquids & Salts</a>
+          <a href="#shop" onclick="StorefrontApp.setCategory('coils')">Coils & Pods</a>
+        </div>
+        <div>
+          <h5>Customer Care</h5>
+          <a href="#" onclick="Toast.info('Shipping: Standard 2-3 days (₱150), Free over ₱1,500.')">Shipping Policy</a>
+          <a href="#" onclick="Toast.info('Returns: 7-day warranty against factory defects.')">Warranty & RMA</a>
+          <a href="#" onclick="Toast.info('Payment: GCash, Maya, Debit/Credit, COD.')">Payment Options</a>
+        </div>
+        <div>
+          <h5>Account Access</h5>
+          <a href="#" onclick="AuthModal.openLogin()">Sign In / Register</a>
+        </div>
+      </div>
+
+      <div class="legal-warning">
+        ⚠️ <b>WARNING:</b> This product contains nicotine. Nicotine is an addictive chemical. Republic Act 11900 strictly prohibits the sale of vaporized nicotine and non-nicotine products to individuals under eighteen (18) years of age. © 2026 VAPEHAUS Philippines. All rights reserved.
+      </div>
+    </div>
+  </footer>
+
+  <!-- Slide-Out Cart Drawer (Customer Ordering Flow) -->
+  <div class="cart-drawer-overlay" id="cart-drawer-overlay">
+    <div class="cart-drawer">
+      <div class="cart-header">
+        <h3>🛒 Shopping Cart</h3>
+        <button class="btn-close-drawer" id="btn-close-cart">✕</button>
+      </div>
+
+      <div class="free-shipping-progress" id="free-shipping-tracker"></div>
+      <div class="cart-items-list" id="cart-items-container"></div>
+      <div class="cart-footer" id="cart-summary-container"></div>
+    </div>
+  </div>
+
+  <!-- Product Detail / Quick View Modal -->
+  <div class="modal-overlay" id="pdp-modal">
+    <div class="modal-card">
+      <button class="modal-close-btn">✕</button>
+      <div id="pdp-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Multi-Step Checkout Modal -->
+  <div class="modal-overlay" id="checkout-modal">
+    <div class="modal-card checkout-card">
+      <button class="modal-close-btn" id="btn-close-checkout">✕</button>
+      <div id="checkout-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Order Confirmation & Live Tracking Modal -->
+  <div class="modal-overlay" id="order-tracker-modal">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="btn-close-tracker">✕</button>
+      <div id="order-tracker-content"></div>
+    </div>
+  </div>
+
+  <!-- Customer Account & KYC Modal -->
+  <div class="modal-overlay" id="account-modal">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="btn-close-account">✕</button>
+      <div id="account-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Authentication Modal (Sign In & Register) -->
+  <div class="modal-overlay" id="auth-modal">
+    <div class="modal-card" style="max-width: 520px;">
+      <button class="modal-close-btn" id="btn-close-auth">✕</button>
+      <div id="auth-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Core Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/domain/order-status.js"></script>
+  <script src="js/domain/money.js"></script>
+  <script src="js/store/state.js"></script>
+  <script src="js/api/client.js"></script>
+
+  <!-- Presentation Components -->
+  <script src="js/components/notifications.js"></script>
+  <script src="js/components/auth-modal.js"></script>
+  <script src="js/components/age-gate.js"></script>
+  <script src="js/components/quick-view.js"></script>
+  <script src="js/components/cart-drawer.js"></script>
+  <script src="js/components/checkout.js"></script>
+  <script src="js/components/order-tracker.js"></script>
+
+  <!-- Page Controller -->
+  <script src="js/storefront.js"></script>
+</body>
+</html>

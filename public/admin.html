@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAPEHAUS — Admin Operations & Back-Office</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/storefront.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- Client-Side RBAC Guard Script -->
+  <script src="js/config.js"></script>
+  <script src="js/domain/order-status.js"></script>
+  <script src="js/domain/money.js"></script>
+  <script src="js/store/state.js"></script>
+  <script src="js/api/client.js"></script>
+  <script src="js/components/notifications.js"></script>
+  <script>
+    // Enforce strict Role-Based Access Control
+    if (!Store.isAdmin()) {
+      alert('Access Denied: Administrator role required. Redirecting to storefront.');
+      window.location.replace('index.html');
+    }
+  </script>
+
+  <div class="admin-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="admin-sidebar">
+      <div class="admin-brand">
+        <a class="logo" href="index.html">VAPE<span>HAUS</span></a>
+        <span class="admin-badge">ADMIN</span>
+      </div>
+
+      <nav class="admin-nav">
+        <div class="admin-nav-item active" data-tab="dashboard">
+          <span class="nav-icon">📊</span>
+          <span>Dashboard</span>
+        </div>
+        <div class="admin-nav-item" data-tab="inventory">
+          <span class="nav-icon">🏷️</span>
+          <span>Products & Stock</span>
+        </div>
+        <div class="admin-nav-item" data-tab="orders">
+          <span class="nav-icon">📦</span>
+          <span>Orders & Fulfillment</span>
+        </div>
+        <div class="admin-nav-item" data-tab="coupons">
+          <span class="nav-icon">🎟️</span>
+          <span>Promo Coupons</span>
+        </div>
+        <div class="admin-nav-item" data-tab="kyc">
+          <span class="nav-icon">🪪</span>
+          <span>18+ KYC Queue</span>
+        </div>
+        <div class="admin-nav-item" data-tab="customers">
+          <span class="nav-icon">👥</span>
+          <span>Customer CRM</span>
+        </div>
+      </nav>
+
+      <div class="admin-user-profile">
+        <div class="admin-avatar">AD</div>
+        <div class="admin-user-info">
+          <div class="admin-user-name">Vapehaus Admin</div>
+          <div class="admin-user-role">admin@vapehaus.ph</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Admin Workspace -->
+    <main class="admin-main">
+      <!-- Topbar with Admin Quick Actions -->
+      <header class="admin-topbar">
+        <div class="topbar-left">
+          <h1 class="page-title" id="admin-page-title">Admin Dashboard</h1>
+        </div>
+
+        <div class="topbar-right" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Prominent Top Admin Actions -->
+          <button class="btn btn-sm btn-cyan" onclick="AdminActionModals.openAddProduct()">
+            + Add Catalog Product
+          </button>
+          <button class="btn btn-sm btn-secondary" onclick="AdminActionModals.openCreateCoupon()">
+            + Create Promo Code
+          </button>
+
+          <a href="index.html" class="store-link-btn" title="View Storefront as Customer">
+            <span>🛍️</span> Storefront ↗
+          </a>
+
+          <button class="btn btn-sm btn-danger" onclick="Store.logout(); window.location.href='index.html';" title="Sign Out">
+            🚪 Sign Out
+          </button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="admin-view-content">
+
+        <!-- TAB 1: DASHBOARD -->
+        <div class="admin-tab-pane active" id="tab-pane-dashboard">
+          <!-- 5 KPI Metric Cards -->
+          <div class="kpi-grid" id="dashboard-kpis-container"></div>
+
+          <div style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 24px;">
+            <!-- Recent Orders -->
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <div class="admin-card-title">Recent Customer Orders</div>
+                <button class="btn btn-secondary btn-sm" onclick="AdminApp.showTab('orders')">Manage Orders →</button>
+              </div>
+              <div class="table-responsive">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Order #</th>
+                      <th>Customer</th>
+                      <th>Date</th>
+                      <th>Total</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboard-recent-orders-table"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Low Stock SKUs Warning -->
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <div class="admin-card-title">Low Stock Alerts (< 10 units)</div>
+                <button class="btn btn-secondary btn-sm" onclick="AdminApp.showTab('inventory')">View Inventory →</button>
+              </div>
+              <div style="padding: 16px;" id="dashboard-low-stock-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: PRODUCTS & INVENTORY -->
+        <div class="admin-tab-pane" id="tab-pane-inventory">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div class="admin-card-title">Product Catalog & Variant Stock Levels</div>
+              <button class="btn btn-cyan btn-sm" onclick="AdminActionModals.openAddProduct()">+ Add Catalog Product</button>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Variant Matrix (Flavor, Nicotine, Price & In-line Stock Adjuster)</th>
+                    <th>Total Stock</th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-table-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: ORDERS MANAGEMENT -->
+        <div class="admin-tab-pane" id="tab-pane-orders">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <!-- Filter Pills -->
+              <div class="admin-table-filters">
+                <div class="filter-pill active" data-status="all" onclick="AdminApp.filterOrders('all')">All Orders</div>
+                <div class="filter-pill" data-status="pending" onclick="AdminApp.filterOrders('pending')">Pending</div>
+                <div class="filter-pill" data-status="paid" onclick="AdminApp.filterOrders('paid')">Paid</div>
+                <div class="filter-pill" data-status="processing" onclick="AdminApp.filterOrders('processing')">Processing</div>
+                <div class="filter-pill" data-status="shipped" onclick="AdminApp.filterOrders('shipped')">Shipped</div>
+                <div class="filter-pill" data-status="delivered" onclick="AdminApp.filterOrders('delivered')">Delivered</div>
+                <div class="filter-pill" data-status="cancelled" onclick="AdminApp.filterOrders('cancelled')">Cancelled</div>
+              </div>
+
+              <!-- Search -->
+              <div style="max-width: 260px;">
+                <input type="text" class="input-control" placeholder="Search order # or name..." oninput="AdminApp.searchOrders(this.value)">
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Placed Date</th>
+                    <th>Payment</th>
+                    <th>Total</th>
+                    <th>Fulfillment Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="orders-table-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: PROMOTIONS & COUPONS -->
+        <div class="admin-tab-pane" id="tab-pane-coupons">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div class="admin-card-title">Promotional Discount Coupons</div>
+              <button class="btn btn-cyan btn-sm" onclick="AdminActionModals.openCreateCoupon()">+ Create Promo Code</button>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Coupon Code</th>
+                    <th>Discount Rate</th>
+                    <th>Minimum Spend</th>
+                    <th>Usage / Max</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="coupons-table-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: 18+ KYC QUEUE -->
+        <div class="admin-tab-pane" id="tab-pane-kyc">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div class="admin-card-title">Statutory 18+ Customer Age Verification Queue</div>
+            </div>
+            <div style="padding: 24px;">
+              <div class="kyc-grid" id="kyc-cards-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 6: CUSTOMER CRM -->
+        <div class="admin-tab-pane" id="tab-pane-customers">
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div class="admin-card-title">Customer CRM Directory</div>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Customer Name</th>
+                    <th>Email Address</th>
+                    <th>Phone</th>
+                    <th>Total Orders</th>
+                    <th>Lifetime Spend</th>
+                    <th>Compliance</th>
+                  </tr>
+                </thead>
+                <tbody id="customers-table-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Fulfillment Inspection Modal -->
+  <div class="modal-overlay" id="fulfillment-modal">
+    <div class="modal-card" style="max-width: 780px;">
+      <button class="modal-close-btn" id="btn-close-fulfillment">✕</button>
+      <div id="fulfillment-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Admin Modal: Add Catalog Product -->
+  <div class="modal-overlay" id="admin-add-product-modal">
+    <div class="modal-card" style="max-width: 600px;">
+      <button class="modal-close-btn" onclick="AdminActionModals.closeAddProduct()">✕</button>
+      <div style="padding: 30px;">
+        <h2 style="font-size: 1.4rem; margin-bottom: 20px;">Add New Catalog Product</h2>
+        <form id="admin-add-product-form" onsubmit="AdminActionModals.submitAddProduct(event)">
+          <div class="input-group">
+            <label class="input-label">Product Name <span class="required">*</span></label>
+            <input type="text" id="admin-new-prod-name" class="input-control" placeholder="e.g. Geekvape Aegis Legend 3" required>
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Brand <span class="required">*</span></label>
+              <input type="text" id="admin-new-prod-brand" class="input-control" placeholder="e.g. GEEKVAPE" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Category</label>
+              <select id="admin-new-prod-cat" class="select-control">
+                <option value="devices">Devices & Mods</option>
+                <option value="pod-systems">Pod Systems</option>
+                <option value="disposables">Disposables</option>
+                <option value="eliquids">E-Liquids & Salts</option>
+                <option value="coils">Coils & Pods</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Base Price (₱) <span class="required">*</span></label>
+              <input type="number" id="admin-new-prod-price" class="input-control" placeholder="e.g. 2950" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Original Price (₱, Optional)</label>
+              <input type="number" id="admin-new-prod-orig-price" class="input-control" placeholder="e.g. 3400">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Initial Stock per Variant</label>
+              <input type="number" id="admin-new-prod-stock" class="input-control" value="20" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Flavors / Colors (Comma-separated)</label>
+              <input type="text" id="admin-new-prod-flavors" class="input-control" placeholder="e.g. Gunmetal, Rainbow, Titanium Silver">
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Product Description</label>
+            <textarea id="admin-new-prod-desc" class="textarea-control" placeholder="Enter specifications, tank capacity, battery info..."></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+            <button type="button" class="btn btn-secondary" onclick="AdminActionModals.closeAddProduct()">Cancel</button>
+            <button type="submit" class="btn btn-cyan">Save Product to Catalog</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Modal: Create Promo Code -->
+  <div class="modal-overlay" id="admin-create-coupon-modal">
+    <div class="modal-card" style="max-width: 480px;">
+      <button class="modal-close-btn" onclick="AdminActionModals.closeCreateCoupon()">✕</button>
+      <div style="padding: 30px;">
+        <h2 style="font-size: 1.4rem; margin-bottom: 20px;">Create Promo Code</h2>
+        <form id="admin-create-coupon-form" onsubmit="AdminActionModals.submitCreateCoupon(event)">
+          <div class="input-group">
+            <label class="input-label">Promo Code <span class="required">*</span></label>
+            <input type="text" id="admin-new-cpn-code" class="input-control" placeholder="e.g. VIP25" style="text-transform: uppercase;" required>
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Discount Rate (%) <span class="required">*</span></label>
+              <input type="number" id="admin-new-cpn-percent" class="input-control" placeholder="e.g. 25" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Minimum Spend (₱)</label>
+              <input type="number" id="admin-new-cpn-minspend" class="input-control" value="0">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Maximum Redemptions</label>
+              <input type="number" id="admin-new-cpn-maxuses" class="input-control" value="500">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Expiry Date</label>
+              <input type="date" id="admin-new-cpn-expiry" class="input-control">
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+            <button type="button" class="btn btn-secondary" onclick="AdminActionModals.closeCreateCoupon()">Cancel</button>
+            <button type="submit" class="btn btn-cyan">Publish Promo Code</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page Controllers -->
+  <script src="js/storefront.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
