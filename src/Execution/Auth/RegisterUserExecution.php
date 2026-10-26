@@ -7,7 +7,9 @@ namespace Vapehaus\Execution\Auth;
 use DateTimeImmutable;
 use Vapehaus\Domain\Exception\UnderageException;
 use Vapehaus\Domain\Exception\ValidationException;
+use Vapehaus\Domain\Model\Session;
 use Vapehaus\Domain\Model\User;
+use Vapehaus\Domain\Repository\SessionRepositoryInterface;
 use Vapehaus\Domain\Repository\UserRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Email;
 use Vapehaus\Domain\ValueObject\Role;
@@ -20,39 +22,34 @@ final class RegisterUserExecution
     private PasswordHasherInterface $passwordHasher;
     private TokenServiceInterface $tokenService;
     private int $minimumAge;
+    private ?SessionRepositoryInterface $sessionRepository;
 
     public function __construct(
         UserRepositoryInterface $userRepository,
         PasswordHasherInterface $passwordHasher,
         TokenServiceInterface $tokenService,
-        int $minimumAge = 18
+        int $minimumAge = 18,
+        ?SessionRepositoryInterface $sessionRepository = null
     ) {
         $this->userRepository = $userRepository;
         $this->passwordHasher = $passwordHasher;
         $this->tokenService = $tokenService;
         $this->minimumAge = $minimumAge;
+        $this->sessionRepository = $sessionRepository;
     }
 
     /**
-     * @param array{
-     *     email: string,
-     *     password: string,
-     *     first_name: string,
-     *     last_name: string,
-     *     phone?: ?string,
-     *     birth_date: string,
-     *     is_age_verified?: bool
-     * } $data
+     * @param array<string, mixed> $data
      * @return array{user: array<string, mixed>, token: string}
      */
     public function execute(array $data): array
     {
-        $emailStr = trim($data['email'] ?? '');
-        $password = $data['password'] ?? '';
-        $firstName = trim($data['first_name'] ?? '');
-        $lastName = trim($data['last_name'] ?? '');
-        $birthDate = trim($data['birth_date'] ?? '');
-        $isAgeVerified = (bool) ($data['is_age_verified'] ?? false);
+        $emailStr = trim((string) ($data['email'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+        $firstName = trim((string) ($data['first_name'] ?? $data['firstName'] ?? ''));
+        $lastName = trim((string) ($data['last_name'] ?? $data['lastName'] ?? ''));
+        $birthDate = trim((string) ($data['birth_date'] ?? $data['birthDate'] ?? ''));
+        $isAgeVerified = (bool) ($data['is_age_verified'] ?? $data['isAgeAttested'] ?? false);
 
         $errors = [];
         if ($emailStr === '') {
@@ -69,6 +66,9 @@ final class RegisterUserExecution
         }
         if ($birthDate === '') {
             $errors[] = ['field' => 'birth_date', 'issue' => 'Birth date is required for vape age verification (YYYY-MM-DD).'];
+        }
+        if (!$isAgeVerified) {
+            $errors[] = ['field' => 'is_age_verified', 'issue' => 'Mandatory age attestation (18+) is required by RA 11900.'];
         }
 
         if (!empty($errors)) {
@@ -115,11 +115,23 @@ final class RegisterUserExecution
 
         $this->userRepository->save($user);
 
+        $ttlSeconds = 86400;
         $token = $this->tokenService->generateToken([
             'sub' => $user->getId(),
             'email' => $user->getEmail()->getValue(),
             'role' => $user->getRole()->getValue(),
-        ]);
+        ], $ttlSeconds);
+
+        if ($this->sessionRepository !== null) {
+            $session = new Session(
+                $token,
+                $user->getId(),
+                $data['ip_address'] ?? null,
+                $data['user_agent'] ?? null,
+                date('Y-m-d H:i:s', time() + $ttlSeconds)
+            );
+            $this->sessionRepository->save($session);
+        }
 
         return [
             'user' => $user->toArray(),

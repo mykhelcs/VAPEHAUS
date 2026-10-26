@@ -35,12 +35,17 @@ final class ListProductsExecution
         $limit = min(100, max(1, (int) ($filters['limit'] ?? 20)));
         $offset = ($page - 1) * $limit;
 
+        $category = $filters['category_id'] ?? $filters['category'] ?? null;
+        if ($category === 'all') {
+            $category = null;
+        }
+
         $criteria = [
-            'category_id' => $filters['category_id'] ?? null,
+            'category_id' => $category,
             'brand' => $filters['brand'] ?? null,
             'flavor' => $filters['flavor'] ?? null,
             'nicotine' => $filters['nicotine'] ?? null,
-            'query' => $filters['query'] ?? null,
+            'query' => $filters['query'] ?? $filters['q'] ?? null,
             'in_stock' => isset($filters['in_stock']) ? (bool) $filters['in_stock'] : null,
         ];
 

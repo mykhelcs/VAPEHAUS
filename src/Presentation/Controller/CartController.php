@@ -38,11 +38,11 @@ final class CartController
     public function getCart(Request $request): Response
     {
         $userId = $request->getAttribute('userId');
-        $sessionToken = $request->getHeader('x-session-token');
+        $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
 
         $cart = $this->getCartExecution->execute(
             $userId !== null ? (string) $userId : null,
-            $sessionToken !== null ? (string) $sessionToken : null
+            $sessionToken !== null ? (string) $sessionToken : 'guest_session'
         );
 
         return ApiResponse::success($cart);
@@ -51,14 +51,14 @@ final class CartController
     public function addItem(Request $request): Response
     {
         $userId = $request->getAttribute('userId');
-        $sessionToken = $request->getHeader('x-session-token');
+        $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
 
-        $variantId = (string) $request->getBodyParam('variant_id', '');
-        $quantity = (int) $request->getBodyParam('quantity', 1);
+        $variantId = (string) ($request->getBodyParam('variant_id') ?? $request->getBodyParam('variantId') ?? '');
+        $quantity = (int) ($request->getBodyParam('quantity') ?? 1);
 
         $cart = $this->addToCartExecution->execute(
             $userId !== null ? (string) $userId : null,
-            $sessionToken !== null ? (string) $sessionToken : null,
+            $sessionToken !== null ? (string) $sessionToken : 'guest_session',
             $variantId,
             $quantity
         );
@@ -72,12 +72,12 @@ final class CartController
     public function updateItem(Request $request, array $params): Response
     {
         $userId = $request->getAttribute('userId');
-        $sessionToken = $request->getHeader('x-session-token');
-        $quantity = (int) $request->getBodyParam('quantity', 1);
+        $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
+        $quantity = (int) ($request->getBodyParam('quantity') ?? 1);
 
         $cart = $this->updateCartItemExecution->execute(
             $userId !== null ? (string) $userId : null,
-            $sessionToken !== null ? (string) $sessionToken : null,
+            $sessionToken !== null ? (string) $sessionToken : 'guest_session',
             $params['itemId'],
             $quantity
         );
@@ -91,11 +91,11 @@ final class CartController
     public function removeItem(Request $request, array $params): Response
     {
         $userId = $request->getAttribute('userId');
-        $sessionToken = $request->getHeader('x-session-token');
+        $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
 
         $cart = $this->removeFromCartExecution->execute(
             $userId !== null ? (string) $userId : null,
-            $sessionToken !== null ? (string) $sessionToken : null,
+            $sessionToken !== null ? (string) $sessionToken : 'guest_session',
             $params['itemId']
         );
 
@@ -105,11 +105,11 @@ final class CartController
     public function clear(Request $request): Response
     {
         $userId = $request->getAttribute('userId');
-        $sessionToken = $request->getHeader('x-session-token');
+        $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
 
         $cart = $this->clearCartExecution->execute(
             $userId !== null ? (string) $userId : null,
-            $sessionToken !== null ? (string) $sessionToken : null
+            $sessionToken !== null ? (string) $sessionToken : 'guest_session'
         );
 
         return ApiResponse::success($cart);

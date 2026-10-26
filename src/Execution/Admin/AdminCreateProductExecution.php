@@ -41,11 +41,27 @@ final class AdminCreateProductExecution
      */
     public function execute(array $data): array
     {
-        $categoryId = $data['category_id'] ?? '';
-        $category = $this->categoryRepository->findById($categoryId);
-        if ($category === null) {
-            throw new EntityNotFoundException('Category', $categoryId);
+        $categoryInput = trim((string) ($data['category_id'] ?? $data['category'] ?? ''));
+        $category = null;
+
+        if ($categoryInput !== '') {
+            $category = $this->categoryRepository->findById($categoryInput);
+            if ($category === null) {
+                $category = $this->categoryRepository->findBySlug(strtolower($categoryInput));
+            }
         }
+
+        if ($category === null) {
+            // Default to first active category or cat_devices
+            $category = $this->categoryRepository->findById('cat_devices')
+                ?? $this->categoryRepository->findById('cat_disposables');
+        }
+
+        if ($category === null) {
+            throw new EntityNotFoundException('Category', $categoryInput);
+        }
+
+        $categoryId = $category->getId();
 
         $name = trim($data['name'] ?? '');
         $slug = trim(strtolower($data['slug'] ?? ''));
@@ -76,18 +92,34 @@ final class AdminCreateProductExecution
         if (!empty($data['variants']) && is_array($data['variants'])) {
             foreach ($data['variants'] as $varData) {
                 $varId = 'var_' . bin2hex(random_bytes(6));
+                $sku = !empty($varData['sku']) ? $varData['sku'] : strtoupper(substr($name, 0, 3)) . '-' . bin2hex(random_bytes(3));
                 $variant = new ProductVariant(
                     $varId,
                     $productId,
-                    new Sku($varData['sku']),
-                    $varData['flavor'],
-                    new NicotineStrength($varData['nicotine']),
-                    Money::fromFloat((float) $varData['price']),
-                    (int) ($varData['stock'] ?? 0)
+                    new Sku($sku),
+                    $varData['flavor'] ?? 'Standard Edition',
+                    new NicotineStrength($varData['nicotine'] ?? '20mg'),
+                    Money::fromFloat((float) ($varData['price'] ?? 0.0)),
+                    (int) ($varData['stock'] ?? 10)
                 );
                 $this->productRepository->saveVariant($variant);
                 $product->addVariant($variant);
             }
+        } elseif (isset($data['price'])) {
+            // Auto-create default variant when single price is passed
+            $varId = 'var_' . bin2hex(random_bytes(6));
+            $sku = strtoupper(substr($name, 0, 3)) . '-' . bin2hex(random_bytes(3));
+            $variant = new ProductVariant(
+                $varId,
+                $productId,
+                new Sku($sku),
+                'Standard Edition',
+                new NicotineStrength('20mg'),
+                Money::fromFloat((float) $data['price']),
+                (int) ($data['stock'] ?? 20)
+            );
+            $this->productRepository->saveVariant($variant);
+            $product->addVariant($variant);
         }
 
         return $product->toArray();

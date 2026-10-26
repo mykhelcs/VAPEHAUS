@@ -139,14 +139,18 @@ final class ProductVariant
         return [
             'id' => $this->id,
             'product_id' => $this->productId,
+            'productId' => $this->productId,
             'sku' => $this->sku->getValue(),
             'flavor' => $this->flavor,
+            'nicotine' => $this->nicotineStrength->getValue(),
             'nicotine_strength' => $this->nicotineStrength->getValue(),
             'price' => $this->price->toFloat(),
             'price_formatted' => sprintf('%s %.2f', $this->price->getCurrency(), $this->price->toFloat()),
+            'stock' => $this->stockQuantity,
             'stock_quantity' => $this->stockQuantity,
             'in_stock' => $this->stockQuantity > 0,
             'is_active' => $this->isActive,
+            'isActive' => $this->isActive,
         ];
     }
 }

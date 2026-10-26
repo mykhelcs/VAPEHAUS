@@ -31,8 +31,23 @@ final class AdminUpdateStockExecution
             throw new EntityNotFoundException('ProductVariant', $variantId);
         }
 
-        $type = $data['adjustment_type'] ?? 'set';
-        $amount = (int) ($data['amount'] ?? 0);
+        $type = $data['adjustment_type'] ?? null;
+        $amount = isset($data['amount']) ? (int) $data['amount'] : null;
+
+        // Support { stock: number, isDelta: bool } from ApiClient
+        if (isset($data['stock']) && $type === null) {
+            $stockVal = (int) $data['stock'];
+            if (!empty($data['isDelta'])) {
+                $type = $stockVal >= 0 ? 'increment' : 'decrement';
+                $amount = abs($stockVal);
+            } else {
+                $type = 'set';
+                $amount = $stockVal;
+            }
+        }
+
+        $type = $type ?? 'set';
+        $amount = $amount ?? 0;
 
         if ($type === 'increment') {
             $variant->incrementStock($amount);

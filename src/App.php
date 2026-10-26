@@ -16,6 +16,7 @@ use Vapehaus\Execution\Admin\AdminUpdateOrderStatusExecution;
 use Vapehaus\Execution\Admin\AdminUpdateStockExecution;
 use Vapehaus\Execution\Auth\AuthenticateUserExecution;
 use Vapehaus\Execution\Auth\GetProfileExecution;
+use Vapehaus\Execution\Auth\LogoutUserExecution;
 use Vapehaus\Execution\Auth\RegisterUserExecution;
 use Vapehaus\Execution\Cart\AddToCartExecution;
 use Vapehaus\Execution\Cart\ClearCartExecution;
@@ -51,6 +52,7 @@ use Vapehaus\Infrastructure\Repository\PdoPaymentTransactionRepository;
 use Vapehaus\Infrastructure\Repository\PdoProductRepository;
 use Vapehaus\Infrastructure\Repository\PdoReturnRepository;
 use Vapehaus\Infrastructure\Repository\PdoReviewRepository;
+use Vapehaus\Infrastructure\Repository\PdoSessionRepository;
 use Vapehaus\Infrastructure\Repository\PdoUserRepository;
 use Vapehaus\Infrastructure\Repository\PdoWishlistRepository;
 use Vapehaus\Infrastructure\Security\JwtTokenService;
@@ -112,19 +114,22 @@ final class App
         $paymentRepo = new PdoPaymentTransactionRepository($this->pdo);
         $auditRepo = new PdoInventoryAuditRepository($this->pdo);
         $notifService = new PdoNotificationService($this->pdo);
+        $sessionRepo = new PdoSessionRepository($this->pdo);
 
         $hasher = new PasswordHasher();
         $tokenService = new JwtTokenService();
 
         // Middlewares
-        $authRequired = new AuthMiddleware($tokenService, false);
-        $authOptional = new AuthMiddleware($tokenService, true);
+        $authRequired = new AuthMiddleware($tokenService, false, $sessionRepo);
+        $authOptional = new AuthMiddleware($tokenService, true, $sessionRepo);
         $adminOnly = new RequireRoleMiddleware('admin');
         $rateLimiter = new RateLimiterMiddleware(120, 60);
+        $authRateLimiter = new RateLimiterMiddleware(5, 60); // 5 attempts per minute (Audit spec)
 
         // Executions
-        $registerExec = new RegisterUserExecution($userRepo, $hasher, $tokenService, 18);
-        $authExec = new AuthenticateUserExecution($userRepo, $hasher, $tokenService);
+        $registerExec = new RegisterUserExecution($userRepo, $hasher, $tokenService, 18, $sessionRepo);
+        $authExec = new AuthenticateUserExecution($userRepo, $hasher, $tokenService, $sessionRepo);
+        $logoutExec = new LogoutUserExecution($sessionRepo);
         $profileExec = new GetProfileExecution($userRepo);
 
         $listCategoriesExec = new ListCategoriesExecution($categoryRepo);
@@ -161,7 +166,7 @@ final class App
         $wishlistExec = new WishlistExecution($wishlistRepo, $productRepo);
         $paymentExec = new PaymentExecution($paymentRepo, $orderRepo, $productRepo, $auditRepo);
 
-        $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo);
+        $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo);
         $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
         $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);
         $adminVariantExec = new AdminCreateVariantExecution($productRepo);
@@ -171,7 +176,7 @@ final class App
         $adminCustomersExec = new AdminListCustomersExecution($userRepo);
 
         // Controllers
-        $authController = new AuthController($registerExec, $authExec, $profileExec);
+        $authController = new AuthController($registerExec, $authExec, $profileExec, $logoutExec);
         $userController = new UserController($profileExec, $userOrdersExec, $orderDetailExec, $cancelOrderExec);
         $catalogController = new CatalogController($listCategoriesExec, $listProductsExec, $productDetailExec, $facetsExec);
         $cartController = new CartController($getCartExec, $addToCartExec, $updateCartItemExec, $removeFromCartExec, $clearCartExec);
@@ -198,21 +203,28 @@ final class App
         );
 
         // 1. Auth Endpoints
-        $this->router->post('/api/v1/auth/register', fn (Request $r) => $authController->register($r), [$rateLimiter]);
-        $this->router->post('/api/v1/auth/login', fn (Request $r) => $authController->login($r), [$rateLimiter]);
+        $this->router->post('/api/v1/auth/register', fn (Request $r) => $authController->register($r), [$authRateLimiter]);
+        $this->router->post('/api/v1/auth/login', fn (Request $r) => $authController->login($r), [$authRateLimiter]);
+        $this->router->post('/api/v1/auth/logout', fn (Request $r) => $authController->logout($r));
         $this->router->get('/api/v1/auth/me', fn (Request $r) => $authController->me($r), [$authRequired]);
 
-        // 2. User & Address Book Endpoints
+        // 2. User & Orders Endpoints (Compatible with both /orders and /user/orders)
         $this->router->get('/api/v1/user/profile', fn (Request $r) => $userController->getProfile($r), [$authRequired]);
         $this->router->get('/api/v1/user/addresses', fn (Request $r) => $addressController->list($r), [$authRequired]);
         $this->router->post('/api/v1/user/addresses', fn (Request $r) => $addressController->create($r), [$authRequired]);
         $this->router->patch('/api/v1/user/addresses/{id}/default', fn (Request $r, array $p) => $addressController->setDefault($r, $p), [$authRequired]);
         $this->router->delete('/api/v1/user/addresses/{id}', fn (Request $r, array $p) => $addressController->delete($r, $p), [$authRequired]);
+        
+        $this->router->get('/api/v1/orders', fn (Request $r) => $userController->getOrders($r), [$authRequired]);
+        $this->router->get('/api/v1/orders/{id}', fn (Request $r, array $p) => $userController->getOrderDetail($r, $p), [$authRequired]);
+        $this->router->post('/api/v1/orders/{id}/cancel', fn (Request $r, array $p) => $userController->cancelOrder($r, $p), [$authRequired]);
         $this->router->get('/api/v1/user/orders', fn (Request $r) => $userController->getOrders($r), [$authRequired]);
         $this->router->get('/api/v1/user/orders/{id}', fn (Request $r, array $p) => $userController->getOrderDetail($r, $p), [$authRequired]);
         $this->router->post('/api/v1/user/orders/{id}/cancel', fn (Request $r, array $p) => $userController->cancelOrder($r, $p), [$authRequired]);
 
-        // 3. Vape KYC Regulatory Endpoints
+        // 3. Vape KYC Regulatory Endpoints (18+ RA 11900)
+        $this->router->get('/api/v1/kyc', fn (Request $r) => $kycController->getStatus($r), [$authRequired]);
+        $this->router->post('/api/v1/kyc', fn (Request $r) => $kycController->submit($r), [$authRequired]);
         $this->router->get('/api/v1/user/kyc', fn (Request $r) => $kycController->getStatus($r), [$authRequired]);
         $this->router->post('/api/v1/user/kyc/submit', fn (Request $r) => $kycController->submit($r), [$authRequired]);
 
@@ -245,7 +257,7 @@ final class App
         $this->router->delete('/api/v1/cart/coupon', fn (Request $r) => $couponController->remove($r), [$authOptional]);
 
         // 9. Checkout & Payment Webhooks
-        $this->router->post('/api/v1/checkout', fn (Request $r) => $orderController->checkout($r), [$authRequired]);
+        $this->router->post('/api/v1/checkout', fn (Request $r) => $orderController->checkout($r), [$authOptional]);
         $this->router->post('/api/v1/webhooks/payments', fn (Request $r) => $paymentController->handleWebhook($r));
 
         // 10. Admin Endpoints
@@ -253,7 +265,11 @@ final class App
         $this->router->post('/api/v1/admin/categories', fn (Request $r) => $adminController->createCategory($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/products', fn (Request $r) => $adminController->createProduct($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/products/{id}/variants', fn (Request $r, array $p) => $adminController->createVariant($r, $p), [$authRequired, $adminOnly]);
+        
+        // Admin Inventory adjustments (both /variants/{id}/stock and /inventory/{id})
+        $this->router->patch('/api/v1/admin/inventory/{id}', fn (Request $r, array $p) => $adminController->updateStock($r, $p), [$authRequired, $adminOnly]);
         $this->router->patch('/api/v1/admin/variants/{id}/stock', fn (Request $r, array $p) => $adminController->updateStock($r, $p), [$authRequired, $adminOnly]);
+        
         $this->router->get('/api/v1/admin/orders', fn (Request $r) => $adminController->getOrders($r), [$authRequired, $adminOnly]);
         $this->router->get('/api/v1/admin/orders/{id}', fn (Request $r, array $p) => $adminController->getOrderDetail($r, $p), [$authRequired, $adminOnly]);
         $this->router->patch('/api/v1/admin/orders/{id}/status', fn (Request $r, array $p) => $adminController->updateOrderStatus($r, $p), [$authRequired, $adminOnly]);
@@ -274,6 +290,8 @@ final class App
         // Admin KYC Queue
         $this->router->get('/api/v1/admin/kyc', fn (Request $r) => $kycController->adminList($r), [$authRequired, $adminOnly]);
         $this->router->patch('/api/v1/admin/kyc/{id}/review', fn (Request $r, array $p) => $kycController->adminReview($r, $p), [$authRequired, $adminOnly]);
+        $this->router->patch('/api/v1/admin/kyc/{id}/approve', fn (Request $r, array $p) => $kycController->adminReview($r->withBody(array_merge($r->getBody(), ['decision' => 'approved'])), $p), [$authRequired, $adminOnly]);
+        $this->router->patch('/api/v1/admin/kyc/{id}/reject', fn (Request $r, array $p) => $kycController->adminReview($r->withBody(array_merge($r->getBody(), ['decision' => 'rejected'])), $p), [$authRequired, $adminOnly]);
 
         // Admin RMA Queue
         $this->router->get('/api/v1/admin/returns', fn (Request $r) => $rmaController->adminList($r), [$authRequired, $adminOnly]);

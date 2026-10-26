@@ -157,7 +157,8 @@ final class PdoProductRepository implements ProductRepositoryInterface
         }
 
         if (!empty($criteria['category_id'])) {
-            $where[] = 'p.category_id = :cid';
+            $joins[] = 'JOIN categories c ON c.id = p.category_id';
+            $where[] = '(p.category_id = :cid OR c.slug = :cid OR c.id = :cid)';
             $params[':cid'] = $criteria['category_id'];
         }
 
@@ -222,7 +223,8 @@ final class PdoProductRepository implements ProductRepositoryInterface
         }
 
         if (!empty($criteria['category_id'])) {
-            $where[] = 'p.category_id = :cid';
+            $joins[] = 'JOIN categories c ON c.id = p.category_id';
+            $where[] = '(p.category_id = :cid OR c.slug = :cid OR c.id = :cid)';
             $params[':cid'] = $criteria['category_id'];
         }
 

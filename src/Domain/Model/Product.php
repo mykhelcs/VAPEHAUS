@@ -144,14 +144,20 @@ final class Product
 
     public function toArray(): array
     {
+        $categorySlug = str_starts_with($this->categoryId, 'cat_')
+            ? substr($this->categoryId, 4)
+            : $this->categoryId;
+
         return [
             'id' => $this->id,
             'category_id' => $this->categoryId,
+            'category' => $categorySlug,
             'name' => $this->name,
             'slug' => $this->slug,
             'brand' => $this->brand,
             'description' => $this->description,
             'is_active' => $this->isActive,
+            'isActive' => $this->isActive,
             'created_at' => $this->createdAt,
             'variants' => array_map(fn (ProductVariant $v) => $v->toArray(), array_values($this->variants)),
         ];
