@@ -9,7 +9,7 @@ const AdminApp = {
   orderSearchQuery: '',
   selectedOrderId: null,
 
-  init() {
+  async init() {
     this.setupSidebarNav();
     this.setupFulfillmentModal();
 
@@ -18,7 +18,21 @@ const AdminApp = {
       this.refreshCurrentView();
     });
 
+    await this.loadInitialData();
     this.showTab('dashboard');
+  },
+
+  async loadInitialData() {
+    try {
+      await Promise.all([
+        Api.getProducts(),
+        Api.getAdminOrders(),
+        Api.getAdminCoupons(),
+        Api.getAdminKyc(),
+      ]);
+    } catch (e) {
+      console.warn('Initial admin data sync warning:', e);
+    }
   },
 
   setupSidebarNav() {
@@ -118,27 +132,38 @@ const AdminApp = {
     // Recent Orders Table
     if (recentOrdersEl) {
       const orders = Store.getOrders().slice(0, 5);
-      recentOrdersEl.innerHTML = orders.map((o) => `
-        <tr>
-          <td><b style="color: var(--accent2);">#${o.orderNumber}</b></td>
-          <td>${o.customerName}</td>
-          <td>${o.createdAt.substring(5, 16)}</td>
-          <td><b>${Money.format(o.total)}</b></td>
-          <td><span class="${OrderStatus.getBadgeClass(o.status)}">${OrderStatus.getLabel(o.status)}</span></td>
-          <td>
-            <button class="btn btn-secondary btn-sm" onclick="AdminApp.openFulfillment('${o.id}')">Inspect</button>
-          </td>
-        </tr>
-      `).join('');
+      if (orders.length === 0) {
+        recentOrdersEl.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">
+              No customer orders placed yet.
+            </td>
+          </tr>
+        `;
+      } else {
+        recentOrdersEl.innerHTML = orders.map((o) => `
+          <tr>
+            <td><b style="color: var(--accent2);">#${o.orderNumber || o.order_number || o.id}</b></td>
+            <td>${o.customerName || o.customer_name || 'Customer'}</td>
+            <td>${(o.createdAt || o.created_at || '').substring(0, 16)}</td>
+            <td><b>${Money.format(o.total)}</b></td>
+            <td><span class="${OrderStatus.getBadgeClass(o.status)}">${OrderStatus.getLabel(o.status)}</span></td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="AdminApp.openFulfillment('${o.id}')">Inspect</button>
+            </td>
+          </tr>
+        `).join('');
+      }
     }
 
     // Low stock SKUs
     if (lowStockEl) {
       const lowStockVariants = [];
       for (const p of Store.getProducts()) {
-        for (const v of p.variants) {
-          if (v.stock < 10) {
-            lowStockVariants.push({ product: p, variant: v });
+        for (const v of (p.variants || [])) {
+          const s = v.stock ?? v.stock_quantity ?? 0;
+          if (s < 10) {
+            lowStockVariants.push({ product: p, variant: { ...v, stock: s } });
           }
         }
       }
@@ -201,18 +226,26 @@ const AdminApp = {
       return;
     }
 
-    tableBody.innerHTML = orders.map((o) => `
+    tableBody.innerHTML = orders.map((o) => {
+      const orderNum = o.orderNumber || o.order_number || o.id;
+      const custName = o.customerName || o.customer_name || 'Customer';
+      const custPhone = o.customerPhone || o.customer_phone || '';
+      const created = (o.createdAt || o.created_at || '').substring(0, 16);
+      const payMethod = o.paymentMethod || o.payment_method || 'cod';
+      const payStatus = o.paymentStatus || o.payment_status || 'unpaid';
+
+      return `
       <tr>
-        <td><b style="color: var(--accent2);">#${o.orderNumber}</b></td>
+        <td><b style="color: var(--accent2);">#${orderNum}</b></td>
         <td>
-          <div style="font-weight: 600;">${o.customerName}</div>
-          <div style="font-size: 0.76rem; color: var(--text-muted);">${o.customerPhone}</div>
+          <div style="font-weight: 600;">${custName}</div>
+          <div style="font-size: 0.76rem; color: var(--text-muted);">${custPhone}</div>
         </td>
-        <td>${o.createdAt.substring(0, 16)}</td>
+        <td>${created}</td>
         <td>
-          <span style="font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">${o.paymentMethod}</span>
-          <span class="badge ${o.paymentStatus === 'paid' ? 'badge-success' : 'badge-muted'}" style="margin-left: 4px;">
-            ${o.paymentStatus}
+          <span style="font-size: 0.8rem; text-transform: uppercase; font-weight: 700;">${payMethod}</span>
+          <span class="badge ${payStatus === 'paid' ? 'badge-success' : 'badge-muted'}" style="margin-left: 4px;">
+            ${payStatus}
           </span>
         </td>
         <td><b>${Money.format(o.total)}</b></td>
@@ -223,7 +256,7 @@ const AdminApp = {
           </button>
         </td>
       </tr>
-    `).join('');
+    `;}).join('');
   },
 
   filterOrders(status) {
@@ -264,13 +297,13 @@ const AdminApp = {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
           <div>
             <h2 style="font-size: 1.4rem;">Order Fulfillment Center</h2>
-            <div style="color: var(--accent2); font-weight: 800; font-size: 1.05rem;">#${order.orderNumber}</div>
+            <div style="color: var(--accent2); font-weight: 800; font-size: 1.05rem;">#${order.orderNumber || order.order_number || order.id}</div>
           </div>
           <span class="${OrderStatus.getBadgeClass(order.status)}">${OrderStatus.getLabel(order.status)}</span>
         </div>
 
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; margin-bottom: 20px; font-size: 0.88rem;">
-          <b>Shipping Address:</b> ${order.shippingAddress}
+          <b>Shipping Address:</b> ${order.shippingAddress || order.shipping_address || '—'}
         </div>
 
         <!-- Line items table -->
@@ -286,15 +319,23 @@ const AdminApp = {
             </tr>
           </thead>
           <tbody>
-            ${order.items.map((it) => `
+            ${(order.items || []).map((it) => {
+              const name = it.productName || it.name || it.snapshotted_name || 'Product';
+              const flavor = it.flavor || it.snapshotted_flavor || '';
+              const nic = it.nicotine || it.snapshotted_nicotine || '';
+              const price = it.price ?? it.unit_price ?? 0;
+              const qty = it.quantity ?? 1;
+              const total = it.total_price ?? (price * qty);
+
+              return `
               <tr style="border-bottom: 1px solid var(--line);">
-                <td style="padding: 8px 0;"><b>${it.productName}</b></td>
-                <td>${it.flavor} (${it.nicotine})</td>
-                <td>${Money.format(it.price)}</td>
-                <td><b>${it.quantity}</b></td>
-                <td><b>${Money.format(it.price * it.quantity)}</b></td>
+                <td style="padding: 8px 0;"><b>${name}</b></td>
+                <td>${flavor}${nic ? ` (${nic})` : ''}</td>
+                <td>${Money.format(price)}</td>
+                <td><b>${qty}</b></td>
+                <td><b>${Money.format(total)}</b></td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
         </table>
 
@@ -341,7 +382,12 @@ const AdminApp = {
 
   async advanceStatus(orderId, targetStatus, metadata = {}) {
     try {
-      const res = await Api.updateOrderStatus(orderId, targetStatus, metadata);
+      let res;
+      if (targetStatus === OrderStatus.SHIPPED && metadata.courierName && metadata.trackingNumber) {
+        res = await Api.shipOrder(orderId, metadata.courierName, metadata.trackingNumber);
+      } else {
+        res = await Api.updateOrderStatus(orderId, targetStatus, metadata);
+      }
       if (res && res.success) {
         Store.updateOrderStatus(orderId, targetStatus, metadata);
         Toast.success(`Status updated to "${OrderStatus.getLabel(targetStatus)}".`);
@@ -373,26 +419,43 @@ const AdminApp = {
 
     const products = Store.getProducts();
 
-    tableBody.innerHTML = products.map((p) => `
+    if (products.length === 0) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="3" style="text-align: center; padding: 40px; color: var(--text-muted);">
+            No products found in catalog.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tableBody.innerHTML = products.map((p) => {
+      const c1 = p.color1 || '#8b5cf6';
+      const c2 = p.color2 || '#22d3ee';
+      const variants = p.variants || [];
+      const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
+
+      return `
       <tr>
         <td>
           <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${p.color1}, ${p.color2}); flex-shrink: 0;"></div>
+            <div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>
             <div>
               <div style="font-weight: 700;">${p.name}</div>
-              <div style="font-size: 0.76rem; color: var(--text-muted);">${p.brand} · ${p.category}</div>
+              <div style="font-size: 0.76rem; color: var(--text-muted);">${p.brand} · ${p.category || p.category_id || ''}</div>
             </div>
           </div>
         </td>
         <td>
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            ${p.variants.map((v) => `
+            ${variants.map((v) => `
               <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; background: var(--surface2); padding: 4px 8px; border-radius: var(--r-sm);">
-                <span><b>${v.flavor}</b> (${v.nicotine})</span>
+                <span><b>${v.flavor}</b> (${v.nicotine || v.nicotine_strength || ''})</span>
                 <span style="color: var(--accent2);">${Money.format(v.price)}</span>
                 <div class="stock-adjust-control">
                   <span class="stock-adjust-btn" onclick="AdminApp.adjustStock('${v.id}', -1)">−</span>
-                  <input type="text" class="stock-number-input" value="${v.stock}" onchange="AdminApp.setStock('${v.id}', this.value)">
+                  <input type="text" class="stock-number-input" value="${v.stock ?? v.stock_quantity ?? 0}" onchange="AdminApp.setStock('${v.id}', this.value)">
                   <span class="stock-adjust-btn" onclick="AdminApp.adjustStock('${v.id}', 1)">+</span>
                 </div>
               </div>
@@ -400,12 +463,12 @@ const AdminApp = {
           </div>
         </td>
         <td>
-          <span class="badge ${p.variants.reduce((a, b) => a + b.stock, 0) > 0 ? 'badge-success' : 'badge-danger'}">
-            ${p.variants.reduce((a, b) => a + b.stock, 0)} Units Total
+          <span class="badge ${totalUnits > 0 ? 'badge-success' : 'badge-danger'}">
+            ${totalUnits} Units Total
           </span>
         </td>
       </tr>
-    `).join('');
+    `;}).join('');
   },
 
   async adjustStock(variantId, delta) {
@@ -445,32 +508,60 @@ const AdminApp = {
     if (!tbody) return;
 
     const coupons = Store.getCoupons();
-    tbody.innerHTML = coupons.map((c) => `
+    if (coupons.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+            No coupons configured. Use "+ Create Promo Code" above to add promotional discounts.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = coupons.map((c) => {
+      const discount = c.discountPercent ?? c.value ?? 0;
+      const minSpend = c.minSpend ?? c.min_spend ?? 0;
+      const usedCount = c.usedCount ?? c.times_used ?? 0;
+      const maxUses = c.maxUses ?? c.usage_limit ?? 0;
+      const isActive = c.isActive !== undefined ? !!c.isActive : (c.is_active == 1);
+
+      return `
       <tr>
         <td><b style="color: var(--accent2);">${c.code}</b></td>
-        <td><b>${c.discountPercent}% OFF</b></td>
-        <td>${c.minSpend > 0 ? Money.format(c.minSpend) : 'No Minimum'}</td>
-        <td>${c.usedCount} / ${c.maxUses}</td>
+        <td><b>${discount}% OFF</b></td>
+        <td>${minSpend > 0 ? Money.format(minSpend) : 'No Minimum'}</td>
+        <td>${usedCount} / ${maxUses}</td>
         <td>
-          <span class="badge ${c.isActive ? 'badge-success' : 'badge-muted'}">
-            ${c.isActive ? 'ACTIVE' : 'PAUSED'}
+          <span class="badge ${isActive ? 'badge-success' : 'badge-muted'}">
+            ${isActive ? 'ACTIVE' : 'PAUSED'}
           </span>
         </td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="AdminApp.toggleCoupon('${c.id}')">
-            ${c.isActive ? 'Pause' : 'Activate'}
+            ${isActive ? 'Pause' : 'Activate'}
           </button>
         </td>
       </tr>
-    `).join('');
+    `;}).join('');
   },
 
-  toggleCoupon(id) {
-    const cpn = Store.getState().coupons.find((c) => c.id === id);
-    if (cpn) {
-      cpn.isActive = !cpn.isActive;
-      Store.save();
-      this.renderCoupons();
+  async toggleCoupon(id) {
+    try {
+      const res = await Api.toggleAdminCoupon(id);
+      if (res && res.success) {
+        const cpn = Store.getState().coupons.find((c) => c.id === id);
+        if (cpn) {
+          cpn.isActive = !cpn.isActive;
+          Store.save();
+        }
+        Toast.success('Coupon status updated.');
+        this.renderCoupons();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to toggle coupon');
+      }
+    } catch (err) {
+      Toast.error(err.message);
     }
   },
 
@@ -480,32 +571,51 @@ const AdminApp = {
     const grid = document.getElementById('kyc-cards-grid');
     if (!grid) return;
 
-    const requests = Store.getState().kycRequests;
+    const requests = Store.getState().kycRequests || [];
 
-    grid.innerHTML = requests.map((k) => `
+    if (requests.length === 0) {
+      grid.innerHTML = `
+        <div style="grid-column: 1 / -1; padding: 50px 20px; text-align: center; color: var(--text-muted);">
+          <div style="font-size: 2.5rem; margin-bottom: 12px;">✅</div>
+          <h3>KYC Verification Queue is Clear</h3>
+          <p style="margin-top: 8px;">No pending statutory age verification submissions awaiting moderation.</p>
+        </div>
+      `;
+      return;
+    }
+
+    grid.innerHTML = requests.map((k) => {
+      const name = k.customerName || k.customer_name || 'Customer';
+      const email = k.customerEmail || k.customer_email || '';
+      const dob = k.birthDate || k.birth_date || '—';
+      const idType = k.idType || k.id_type || 'ID';
+      const idNum = k.idNumber || k.id_number || '—';
+      const status = (k.status || 'pending').toLowerCase();
+
+      return `
       <div class="kyc-card">
         <div class="kyc-user-header">
           <div>
-            <h4 style="font-size: 1.1rem;">${k.customerName}</h4>
-            <div style="font-size: 0.78rem; color: var(--text-muted);">${k.customerEmail}</div>
+            <h4 style="font-size: 1.1rem;">${name}</h4>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">${email}</div>
           </div>
-          <span class="badge ${k.status === 'approved' ? 'badge-success' : 'badge-warning'}">
-            ${k.status.toUpperCase()}
+          <span class="badge ${status === 'approved' ? 'badge-success' : 'badge-warning'}">
+            ${status.toUpperCase()}
           </span>
         </div>
         <div style="font-size: 0.84rem;">
-          <div><b>Birth Date:</b> ${k.birthDate}</div>
-          <div><b>ID Type:</b> ${k.idType} (${k.idNumber})</div>
+          <div><b>Birth Date:</b> ${dob}</div>
+          <div><b>ID Type:</b> ${idType} (${idNum})</div>
         </div>
         <div class="kyc-id-preview">[Verified Government ID Photo Document]</div>
-        ${k.status === 'pending' ? `
+        ${status === 'pending' ? `
           <div style="display: flex; gap: 10px; margin-top: 8px;">
             <button class="btn btn-sm btn-cyan btn-block" onclick="AdminApp.approveKyc('${k.id}')">Approve (18+)</button>
             <button class="btn btn-sm btn-danger btn-block" onclick="AdminApp.rejectKyc('${k.id}')">Reject</button>
           </div>
         ` : ''}
       </div>
-    `).join('');
+    `;}).join('');
   },
 
   async approveKyc(id) {
@@ -548,41 +658,68 @@ const AdminApp = {
 
   // --- MODULE 6: CUSTOMERS ---
 
-  renderCustomers() {
+  async renderCustomers() {
     const tbody = document.getElementById('customers-table-tbody');
     if (!tbody) return;
 
-    const orders = Store.getOrders();
-    const customerMap = {};
+    let customers = [];
+    try {
+      const res = await Api.getAdminCustomers();
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        customers = res.data;
+      }
+    } catch (e) {}
 
-    for (const o of orders) {
-      if (!customerMap[o.customerEmail]) {
-        customerMap[o.customerEmail] = {
-          name: o.customerName,
-          email: o.customerEmail,
-          phone: o.customerPhone,
-          orderCount: 0,
-          totalSpent: 0,
-        };
+    if (customers.length === 0) {
+      const orders = Store.getOrders();
+      const customerMap = {};
+
+      for (const o of orders) {
+        const email = o.customerEmail || o.customer_email;
+        if (!email) continue;
+        if (!customerMap[email]) {
+          customerMap[email] = {
+            name: o.customerName || o.customer_name || 'Customer',
+            email: email,
+            phone: o.customerPhone || o.customer_phone || '',
+            orderCount: 0,
+            totalSpent: 0,
+          };
+        }
+        customerMap[email].orderCount++;
+        if (o.status !== OrderStatus.CANCELLED) {
+          customerMap[email].totalSpent += (o.total || 0);
+        }
       }
-      customerMap[o.customerEmail].orderCount++;
-      if (o.status !== OrderStatus.CANCELLED) {
-        customerMap[o.customerEmail].totalSpent += o.total;
-      }
+      customers = Object.values(customerMap);
     }
 
-    const customers = Object.values(customerMap);
+    if (customers.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+            No customer order history recorded yet.
+          </td>
+        </tr>
+      `;
+      return;
+    }
 
-    tbody.innerHTML = customers.map((c) => `
+    tbody.innerHTML = customers.map((c) => {
+      const name = c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email;
+      const count = c.orderCount ?? c.total_orders ?? 0;
+      const spent = c.totalSpent ?? c.total_spent ?? 0;
+
+      return `
       <tr>
-        <td><b>${c.name}</b></td>
+        <td><b>${name}</b></td>
         <td>${c.email}</td>
-        <td>${c.phone}</td>
-        <td>${c.orderCount} Orders</td>
-        <td><b style="color: var(--accent2);">${Money.format(c.totalSpent)}</b></td>
+        <td>${c.phone || '—'}</td>
+        <td>${count} Orders</td>
+        <td><b style="color: var(--accent2);">${Money.format(spent)}</b></td>
         <td><span class="badge badge-success">✓ 18+ Age Verified</span></td>
       </tr>
-    `).join('');
+    `;}).join('');
   },
 };
 

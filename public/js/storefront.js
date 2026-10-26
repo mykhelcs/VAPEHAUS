@@ -11,7 +11,7 @@ const StorefrontApp = {
   inStockOnly: false,
   searchQuery: '',
 
-  init() {
+  async init() {
     // 1. Initialize Sub-Components
     if (typeof AgeGate !== 'undefined') AgeGate.init();
     if (typeof AuthModal !== 'undefined') AuthModal.init();
@@ -30,9 +30,24 @@ const StorefrontApp = {
 
     // 3. Subscribe to Store updates to re-render products and user state
     Store.subscribe(() => {
+      this.setupCategories();
       this.renderProducts();
     });
 
+    // 4. Asynchronously fetch live catalog from API
+    await this.loadCatalog();
+  },
+
+  async loadCatalog() {
+    try {
+      await Promise.all([
+        Api.getCategories(),
+        Api.getProducts(),
+      ]);
+    } catch (e) {
+      console.warn('API catalog fetch failed, using available store state:', e);
+    }
+    this.setupCategories();
     this.renderProducts();
   },
 
@@ -40,11 +55,16 @@ const StorefrontApp = {
     const container = document.getElementById('category-chips-bar');
     if (!container) return;
 
-    const categories = Store.getCategories();
+    const rawCategories = Store.getCategories();
+    const categories = [
+      { id: 'cat_all', name: 'All Products', slug: 'all', icon: '🔥' },
+      ...rawCategories.filter((c) => c.slug !== 'all'),
+    ];
+
     container.innerHTML = categories.map((cat) => `
       <div class="cat-chip ${cat.slug === this.currentCategory ? 'active' : ''}" 
            data-slug="${cat.slug}" onclick="StorefrontApp.setCategory('${cat.slug}')">
-        <span>${cat.icon}</span> ${cat.name}
+        <span>${cat.icon || '💨'}</span> ${cat.name}
       </div>
     `).join('');
   },
@@ -80,18 +100,22 @@ const StorefrontApp = {
       if (products.length === 0) {
         dropdown.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.88rem;">No products found for "${query}"</div>`;
       } else {
-        dropdown.innerHTML = products.slice(0, 5).map((p) => `
+        dropdown.innerHTML = products.slice(0, 5).map((p) => {
+          const v = (p.variants && p.variants.length > 0) ? p.variants[0] : { price: 0 };
+          const c1 = p.color1 || '#8b5cf6';
+          const c2 = p.color2 || '#22d3ee';
+          return `
           <div class="search-item" onclick="StorefrontApp.handleSearchItemClick('${p.id}')">
             <div class="search-item-thumb">
-              <div class="device-art" style="width: 20px; height: 32px; border-radius: 4px; background: linear-gradient(160deg, ${p.color1}, ${p.color2});"></div>
+              <div class="device-art" style="width: 20px; height: 32px; border-radius: 4px; background: linear-gradient(160deg, ${c1}, ${c2});"></div>
             </div>
             <div class="search-item-info">
               <div class="search-item-title">${p.name}</div>
-              <div class="search-item-meta">${p.brand} · ${p.rating} ★</div>
+              <div class="search-item-meta">${p.brand} · ${p.rating || p.average_rating || 5.0} ★</div>
             </div>
-            <div class="search-item-price">${Money.format(p.variants[0].price)}</div>
+            <div class="search-item-price">${Money.format(v.price)}</div>
           </div>
-        `).join('');
+        `;}).join('');
       }
 
       dropdown.classList.add('active');
@@ -217,15 +241,19 @@ const StorefrontApp = {
     }
 
     gridEl.innerHTML = products.map((p) => {
-      const mainVariant = p.variants[0];
-      const hasStock = p.variants.some((v) => v.stock > 0);
-      const totalStock = p.variants.reduce((acc, v) => acc + v.stock, 0);
+      const mainVariant = (p.variants && p.variants.length > 0) ? p.variants[0] : { price: 0, stock: 0 };
+      const hasStock = p.variants ? p.variants.some((v) => v.stock > 0) : false;
+      const totalStock = p.variants ? p.variants.reduce((acc, v) => acc + (v.stock || 0), 0) : 0;
+      const c1 = p.color1 || '#8b5cf6';
+      const c2 = p.color2 || '#22d3ee';
+      const reviews = p.reviewsCount ?? p.review_count ?? p.reviews ?? 0;
+      const rating = p.rating ?? p.average_rating ?? 5.0;
 
       return `
         <article class="product-card">
           <div class="product-thumb" onclick="QuickViewModal.open('${p.id}')">
             ${p.badge ? `<span class="badge badge-cyan product-badge">${p.badge}</span>` : ''}
-            <div class="device-art" style="--c1: ${p.color1}; --c2: ${p.color2}"></div>
+            <div class="device-art" style="--c1: ${c1}; --c2: ${c2}"></div>
             <div class="product-stock-tag ${totalStock < 10 ? 'low' : ''}">
               ${hasStock ? (totalStock < 10 ? `Only ${totalStock} left` : 'In Stock') : 'Out of Stock'}
             </div>
@@ -236,7 +264,7 @@ const StorefrontApp = {
             <h3 class="product-title" onclick="QuickViewModal.open('${p.id}')">${p.name}</h3>
             
             <div class="product-rating">
-              ★★★★★ <span>(${p.reviewsCount})</span>
+              ★★★★★ <span>(${reviews})</span>
             </div>
 
             <div class="product-footer">
@@ -386,8 +414,8 @@ const StorefrontApp = {
         ${orders.map((o) => `
           <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
-              <div style="font-weight: 800; font-size: 0.95rem; color: var(--accent2);">#${o.orderNumber}</div>
-              <div style="font-size: 0.78rem; color: var(--text-muted);">${o.createdAt} · ${o.items.length} items</div>
+              <div style="font-weight: 800; font-size: 0.95rem; color: var(--accent2);">#${o.orderNumber || o.order_number || o.id}</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">${(o.createdAt || o.created_at || '').substring(0, 16)} · ${(o.items || []).length} items</div>
               <div style="font-size: 0.88rem; font-weight: 700; margin-top: 4px;">Total: ${Money.format(o.total)}</div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px;">

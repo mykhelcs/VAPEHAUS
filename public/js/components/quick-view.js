@@ -84,7 +84,7 @@ const QuickViewModal = {
       <div class="pdp-grid">
         <div class="pdp-gallery">
           <div class="pdp-main-img">
-            <div class="device-art" style="--c1: ${p.color1}; --c2: ${p.color2}"></div>
+            <div class="device-art" style="--c1: ${p.color1 || '#8b5cf6'}; --c2: ${p.color2 || '#22d3ee'}"></div>
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center;">
             SKU: <b style="color: var(--text);">${v.sku}</b>
@@ -102,7 +102,7 @@ const QuickViewModal = {
           <h2>${p.name}</h2>
           
           <div class="product-rating">
-            ★★★★★ <span>${p.rating} (${p.reviewsCount} verified reviews)</span>
+            ★★★★★ <span>${p.rating || p.average_rating || 5.0} (${p.reviewsCount || p.review_count || 0} verified reviews)</span>
           </div>
 
           <div class="pdp-price">

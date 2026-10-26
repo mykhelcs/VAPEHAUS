@@ -11,278 +11,39 @@ class VapehausStore {
 
   getInitialSeedData() {
     return {
-      // Current active session user: starts as guest (null) or pre-loaded user
+      // Current active session user: starts as guest (null)
       currentUser: null,
       users: [
         { ...CONFIG.DEFAULT_USER },
         { ...CONFIG.DEFAULT_ADMIN },
       ],
-      categories: [
-        { id: 'cat_all', name: 'All Products', slug: 'all', icon: '🔥' },
-        { id: 'cat_disposables', name: 'Disposables', slug: 'disposables', icon: '🗑️' },
-        { id: 'cat_pod_systems', name: 'Pod Systems', slug: 'pod-systems', icon: '🧃' },
-        { id: 'cat_devices', name: 'Devices & Mods', slug: 'devices', icon: '🔋' },
-        { id: 'cat_eliquids', name: 'E-Liquids & Salts', slug: 'eliquids', icon: '💧' },
-        { id: 'cat_coils', name: 'Coils & Pods', slug: 'coils', icon: '🔧' },
-      ],
-      products: [
-        {
-          id: 'prod_1',
-          name: 'Voopoo Drag X Pro Kit',
-          slug: 'voopoo-drag-x-pro-kit',
-          brand: 'VOOPOO',
-          category: 'devices',
-          description: 'High-performance 100W pod mod with GENE.FAN 3.0 chip, 360° airflow system, and TPP X Pod tank.',
-          rating: 4.9,
-          reviewsCount: 64,
-          badge: 'Sale',
-          color1: '#8b5cf6',
-          color2: '#22d3ee',
-          variants: [
-            { id: 'var_1_1', sku: 'VPO-DXP-BLK-0', flavor: 'Classic Black', nicotine: '0mg', price: 3490.0, originalPrice: 3990.0, stock: 12 },
-            { id: 'var_1_2', sku: 'VPO-DXP-CRB-3', flavor: 'Carbon Fiber', nicotine: '3mg', price: 3490.0, originalPrice: 3990.0, stock: 8 },
-            { id: 'var_1_3', sku: 'VPO-DXP-SAH-6', flavor: 'Sahara Brown', nicotine: '6mg', price: 3490.0, originalPrice: 3990.0, stock: 15 },
-          ],
-        },
-        {
-          id: 'prod_2',
-          name: 'Smok Novo 5 Pod System',
-          slug: 'smok-novo-5-pod-system',
-          brand: 'SMOK',
-          category: 'pod-systems',
-          description: 'Compact 30W pod system with 900mAh battery, button/air switch draw, and 0.69-inch OLED display.',
-          rating: 4.8,
-          reviewsCount: 42,
-          badge: 'New',
-          color1: '#22d3ee',
-          color2: '#0ea5e9',
-          variants: [
-            { id: 'var_2_1', sku: 'SMK-NOV5-SLV-20', flavor: 'Silver Black', nicotine: '20mg', price: 1290.0, originalPrice: null, stock: 24 },
-            { id: 'var_2_2', sku: 'SMK-NOV5-CYN-30', flavor: 'Cyan Blue', nicotine: '30mg', price: 1290.0, originalPrice: null, stock: 18 },
-            { id: 'var_2_3', sku: 'SMK-NOV5-BLK-50', flavor: 'Matte Black', nicotine: '50mg', price: 1290.0, originalPrice: null, stock: 6 },
-          ],
-        },
-        {
-          id: 'prod_3',
-          name: 'Geekvape Aegis Boost 2 (B60)',
-          slug: 'geekvape-aegis-boost-2',
-          brand: 'GEEKVAPE',
-          category: 'devices',
-          description: 'IP68-rated shockproof, dustproof, and waterproof 60W beast with AS-Chip 3.0 and top airflow leakproof design.',
-          rating: 4.9,
-          reviewsCount: 58,
-          badge: 'Hot',
-          color1: '#f43f5e',
-          color2: '#8b5cf6',
-          variants: [
-            { id: 'var_3_1', sku: 'GKV-B60-GUN-0', flavor: 'Gunmetal Titanium', nicotine: '0mg', price: 2850.0, originalPrice: null, stock: 14 },
-            { id: 'var_3_2', sku: 'GKV-B60-RNB-20', flavor: 'Rainbow Chrome', nicotine: '20mg', price: 2850.0, originalPrice: null, stock: 9 },
-            { id: 'var_3_3', sku: 'GKV-B60-RED-50', flavor: 'Red Silver Shield', nicotine: '50mg', price: 2850.0, originalPrice: null, stock: 11 },
-          ],
-        },
-        {
-          id: 'prod_4',
-          name: 'Uwell Caliburn G3 Pod Kit',
-          slug: 'uwell-caliburn-g3-pod-kit',
-          brand: 'UWELL',
-          category: 'pod-systems',
-          description: 'The definitive pod system with 25W max output, 900mAh battery, dual ignition, and OLED screen.',
-          rating: 4.7,
-          reviewsCount: 39,
-          badge: 'Sale',
-          color1: '#10b981',
-          color2: '#22d3ee',
-          variants: [
-            { id: 'var_4_1', sku: 'UWL-CG3-MID-20', flavor: 'Midnight Black', nicotine: '20mg', price: 1650.0, originalPrice: 1900.0, stock: 32 },
-            { id: 'var_4_2', sku: 'UWL-CG3-COB-30', flavor: 'Cobalt Blue', nicotine: '30mg', price: 1650.0, originalPrice: 1900.0, stock: 19 },
-            { id: 'var_4_3', sku: 'UWL-CG3-ROS-50', flavor: 'Rose Pink', nicotine: '50mg', price: 1650.0, originalPrice: 1900.0, stock: 5 },
-          ],
-        },
-        {
-          id: 'prod_5',
-          name: 'Naked 100 Lava Flow 60ml',
-          slug: 'naked-100-lava-flow-60ml',
-          brand: 'NAKED 100',
-          category: 'eliquids',
-          description: 'An exhilarating flavor profile pairing sweet strawberries, tangy pineapple, and rich coconut cream.',
-          rating: 4.9,
-          reviewsCount: 84,
-          badge: 'Hot',
-          color1: '#f59e0b',
-          color2: '#ef4444',
-          variants: [
-            { id: 'var_5_1', sku: 'NKD-LAV-3MG', flavor: 'Strawberry Pineapple Coconut', nicotine: '3mg', price: 650.0, originalPrice: null, stock: 45 },
-            { id: 'var_5_2', sku: 'NKD-LAV-6MG', flavor: 'Strawberry Pineapple Coconut', nicotine: '6mg', price: 650.0, originalPrice: null, stock: 38 },
-            { id: 'var_5_3', sku: 'NKD-LAV-12MG', flavor: 'Strawberry Pineapple Coconut', nicotine: '12mg', price: 650.0, originalPrice: null, stock: 22 },
-          ],
-        },
-        {
-          id: 'prod_6',
-          name: 'Juice Head Peach Pear 100ml',
-          slug: 'juice-head-peach-pear-100ml',
-          brand: 'JUICE HEAD',
-          category: 'eliquids',
-          description: 'A blend of luscious georgian peaches and ripe crispy pears infused for all-day vaping bliss.',
-          rating: 4.8,
-          reviewsCount: 51,
-          badge: 'Staff Pick',
-          color1: '#fb923c',
-          color2: '#f472b6',
-          variants: [
-            { id: 'var_6_1', sku: 'JHD-PCP-3MG', flavor: 'Peach Pear Classic', nicotine: '3mg', price: 780.0, originalPrice: null, stock: 29 },
-            { id: 'var_6_2', sku: 'JHD-PCP-6MG', flavor: 'Peach Pear Classic', nicotine: '6mg', price: 780.0, originalPrice: null, stock: 21 },
-          ],
-        },
-        {
-          id: 'prod_7',
-          name: 'RELX Infinity 2 Closed Pod Device',
-          slug: 'relx-infinity-2-device',
-          brand: 'RELX',
-          category: 'disposables',
-          description: '3-level power adjustment (Eco, Smooth, Boost), ultra-fast 15-minute charging, and SmartPace vibration.',
-          rating: 4.8,
-          reviewsCount: 76,
-          badge: 'New',
-          color1: '#a78bfa',
-          color2: '#6366f1',
-          variants: [
-            { id: 'var_7_1', sku: 'RLX-INF2-OBS-30', flavor: 'Obsidian Black', nicotine: '30mg', price: 1490.0, originalPrice: null, stock: 25 },
-            { id: 'var_7_2', sku: 'RLX-INF2-ROY-30', flavor: 'Royal Blue', nicotine: '30mg', price: 1490.0, originalPrice: null, stock: 17 },
-            { id: 'var_7_3', sku: 'RLX-INF2-RUB-50', flavor: 'Ruby Red', nicotine: '50mg', price: 1490.0, originalPrice: null, stock: 14 },
-          ],
-        },
-        {
-          id: 'prod_8',
-          name: 'Voopoo PnP Coil 5-Pack Replacement',
-          slug: 'voopoo-pnp-coils-5pack',
-          brand: 'VOOPOO',
-          category: 'coils',
-          description: 'Original Voopoo PnP Mesh replacement coils engineered for massive clouds and authentic e-liquid flavor.',
-          rating: 4.9,
-          reviewsCount: 92,
-          badge: '',
-          color1: '#64748b',
-          color2: '#22d3ee',
-          variants: [
-            { id: 'var_8_1', sku: 'VPO-PNP-VM1-03', flavor: '0.3Ω VM1 Mesh (32-40W)', nicotine: '0mg', price: 520.0, originalPrice: null, stock: 60 },
-            { id: 'var_8_2', sku: 'VPO-PNP-VM5-02', flavor: '0.2Ω VM5 Mesh (40-60W)', nicotine: '0mg', price: 520.0, originalPrice: null, stock: 45 },
-            { id: 'var_8_3', sku: 'VPO-PNP-VM6-015', flavor: '0.15Ω VM6 Mesh (60-80W)', nicotine: '0mg', price: 520.0, originalPrice: null, stock: 35 },
-          ],
-        },
-      ],
+      categories: [],
+      products: [],
       cart: {
-        items: [
-          { variantId: 'var_2_1', productId: 'prod_2', quantity: 1 },
-          { variantId: 'var_5_1', productId: 'prod_5', quantity: 1 },
-        ],
-        appliedCouponCode: 'HAUS10',
+        items: [],
+        appliedCouponCode: null,
       },
-      coupons: [
-        { id: 'cpn_1', code: 'HAUS10', discountPercent: 10, minSpend: 0, maxUses: 1000, usedCount: 142, isActive: true },
-        { id: 'cpn_2', code: 'VAPE20', discountPercent: 20, minSpend: 2000, maxUses: 200, usedCount: 58, isActive: true },
-      ],
-      orders: [
-        {
-          id: 'ord_101',
-          orderNumber: 'VH-20261023-A721',
-          customerName: 'Juan Dela Cruz',
-          customerEmail: 'customer@vapehaus.ph',
-          customerPhone: '+63 917 888 9999',
-          shippingAddress: 'Unit 12B, Emerald Tower, Ortigas Center, Pasig City, Metro Manila 1605',
-          paymentMethod: 'gcash',
-          paymentStatus: 'paid',
-          status: 'delivered',
-          subtotal: 3490.0,
-          discountAmount: 349.0,
-          couponCode: 'HAUS10',
-          shippingFee: 0.0,
-          total: 3141.0,
-          courierName: 'J&T Express',
-          trackingNumber: 'JT-982144182PH',
-          createdAt: '2026-10-23 10:14:00',
-          shippedAt: '2026-10-23 14:00:00',
-          deliveredAt: '2026-10-24 08:30:00',
-          items: [
-            {
-              id: 'item_101_1',
-              productId: 'prod_1',
-              productName: 'Voopoo Drag X Pro Kit',
-              variantSku: 'VPO-DXP-BLK-0',
-              flavor: 'Classic Black',
-              nicotine: '0mg',
-              price: 3490.0,
-              quantity: 1,
-            },
-          ],
-        },
-        {
-          id: 'ord_102',
-          orderNumber: 'VH-20261024-B192',
-          customerName: 'Maria Santos',
-          customerEmail: 'maria.s@gmail.com',
-          customerPhone: '+63 918 222 3344',
-          shippingAddress: 'Blk 4 Lot 8, Mahogany Ave, San Jose, Antipolo, Rizal 1870',
-          paymentMethod: 'cod',
-          paymentStatus: 'unpaid',
-          status: 'processing',
-          subtotal: 1940.0,
-          discountAmount: 0.0,
-          couponCode: null,
-          shippingFee: 0.0,
-          total: 1940.0,
-          courierName: 'Lalamove',
-          trackingNumber: null,
-          createdAt: '2026-10-24 07:45:00',
-          shippedAt: null,
-          deliveredAt: null,
-          items: [
-            {
-              id: 'item_102_1',
-              productId: 'prod_2',
-              productName: 'Smok Novo 5 Pod System',
-              variantSku: 'SMK-NOV5-CYN-30',
-              flavor: 'Cyan Blue',
-              nicotine: '30mg',
-              price: 1290.0,
-              quantity: 1,
-            },
-            {
-              id: 'item_102_2',
-              productId: 'prod_5',
-              productName: 'Naked 100 Lava Flow 60ml',
-              variantSku: 'NKD-LAV-3MG',
-              flavor: 'Strawberry Pineapple Coconut',
-              nicotine: '3mg',
-              price: 650.0,
-              quantity: 1,
-            },
-          ],
-        },
-      ],
-      kycRequests: [
-        {
-          id: 'kyc_1',
-          userId: 'usr_customer_default',
-          customerName: 'Juan Dela Cruz',
-          customerEmail: 'customer@vapehaus.ph',
-          birthDate: '1998-05-15',
-          idType: 'Philippine Passport',
-          idNumber: 'P8921822B',
-          status: 'approved',
-          submittedAt: '2026-10-22 14:20:00',
-        },
-      ],
+      coupons: [],
+      orders: [],
+      kycRequests: [],
       inventoryAuditLogs: [],
     };
   }
 
   loadInitialState() {
     try {
+      localStorage.removeItem('VAPEHAUS_STORE_STATE_V2');
+      localStorage.removeItem('VAPEHAUS_STORE_STATE');
       const stored = localStorage.getItem(CONFIG.STORAGE_KEYS.STATE);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.orders)) {
-          return parsed;
+          // If stored state contains old mock orders or old mock products, discard it
+          const hasMockOrders = parsed.orders.some((o) => o.id === 'ord_101' || o.id === 'ord_102');
+          const hasMockProducts = parsed.products.some((p) => p.id === 'prod_1' || p.id === 'prod_2');
+          if (!hasMockOrders && !hasMockProducts) {
+            return parsed;
+          }
         }
       }
     } catch (e) {
@@ -437,6 +198,33 @@ class VapehausStore {
     this.save();
   }
 
+  // --- STATE SYNCHRONIZATION WITH REAL API ---
+
+  setProducts(products) {
+    this.state.products = Array.isArray(products) ? products : [];
+    this.save();
+  }
+
+  setCategories(categories) {
+    this.state.categories = Array.isArray(categories) ? categories : [];
+    this.save();
+  }
+
+  setOrders(orders) {
+    this.state.orders = Array.isArray(orders) ? orders : [];
+    this.save();
+  }
+
+  setCoupons(coupons) {
+    this.state.coupons = Array.isArray(coupons) ? coupons : [];
+    this.save();
+  }
+
+  setKycRequests(requests) {
+    this.state.kycRequests = Array.isArray(requests) ? requests : [];
+    this.save();
+  }
+
   // --- QUERY SELECTORS ---
 
   getState() {
@@ -474,7 +262,7 @@ class VapehausStore {
   }
 
   getOrderById(id) {
-    return this.state.orders.find((o) => o.id === id || o.orderNumber === id);
+    return this.state.orders.find((o) => o.id === id || o.orderNumber === id || o.order_number === id);
   }
 
   getCartItemsDetailed() {
@@ -507,10 +295,10 @@ class VapehausStore {
     let discountPercent = 0;
     if (this.state.cart.appliedCouponCode) {
       const coupon = this.state.coupons.find(
-        (c) => c.code.toUpperCase() === this.state.cart.appliedCouponCode.toUpperCase() && c.isActive
+        (c) => c.code.toUpperCase() === this.state.cart.appliedCouponCode.toUpperCase() && (c.isActive || c.is_active || c.isActive === undefined)
       );
       if (coupon) {
-        discountPercent = coupon.discountPercent;
+        discountPercent = coupon.discountPercent ?? coupon.value ?? 0;
       }
     }
 
@@ -598,15 +386,17 @@ class VapehausStore {
     const normalized = couponCode.trim().toUpperCase();
     const coupon = this.state.coupons.find((c) => c.code.toUpperCase() === normalized);
 
-    if (!coupon || !coupon.isActive) {
+    const isActive = coupon && (coupon.isActive || coupon.is_active || coupon.isActive === undefined);
+    if (!coupon || !isActive) {
       throw new Error(`Promo code "${couponCode}" is invalid or expired.`);
     }
 
     const detailedItems = this.getCartItemsDetailed();
     const currentSubtotal = detailedItems.reduce((acc, item) => acc + item.lineTotal, 0);
+    const minSpend = coupon.minSpend ?? coupon.min_spend ?? 0;
 
-    if (coupon.minSpend > 0 && currentSubtotal < coupon.minSpend) {
-      throw new Error(`Promo code "${normalized}" requires a minimum spend of ${Money.format(coupon.minSpend)}.`);
+    if (minSpend > 0 && currentSubtotal < minSpend) {
+      throw new Error(`Promo code "${normalized}" requires a minimum spend of ${Money.format(minSpend)}.`);
     }
 
     this.state.cart.appliedCouponCode = normalized;

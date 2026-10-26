@@ -210,9 +210,13 @@ class VapehausApiClient {
   // ── CATALOG ───────────────────────────────────────────────────────────
 
   async getCategories() {
-    return this._request('GET', '/categories', null, async () =>
+    const result = await this._request('GET', '/categories', null, async () =>
       this._wrapSuccess(Store.getCategories())
     );
+    if (result.success && Array.isArray(result.data)) {
+      Store.setCategories(result.data);
+    }
+    return result;
   }
 
   async getProducts(filters = {}) {
@@ -224,7 +228,7 @@ class VapehausApiClient {
     if (filters.sort) params.set('sort', filters.sort);
     const qs = params.toString();
 
-    return this._request('GET', `/products${qs ? '?' + qs : ''}`, null, async () => {
+    const result = await this._request('GET', `/products${qs ? '?' + qs : ''}`, null, async () => {
       let products = Store.getProducts();
       if (filters.category && filters.category !== 'all') {
         products = products.filter((p) => p.category === filters.category);
@@ -240,6 +244,13 @@ class VapehausApiClient {
       if (filters.sort === 'rating') products.sort((a, b) => b.rating - a.rating);
       return this._wrapSuccess(products, { total: products.length });
     });
+
+    if (result.success && Array.isArray(result.data)) {
+      if (!filters.category && !filters.brand && !filters.query) {
+        Store.setProducts(result.data);
+      }
+    }
+    return result;
   }
 
   async getProductDetail(identifier) {
@@ -322,7 +333,7 @@ class VapehausApiClient {
     if (filters.search) params.set('q', filters.search);
     const qs = params.toString();
 
-    return this._request('GET', `/orders${qs ? '?' + qs : ''}`, null, async () => {
+    const result = await this._request('GET', `/orders${qs ? '?' + qs : ''}`, null, async () => {
       let orders = Store.getOrders();
       if (filters.status && filters.status !== 'all') {
         orders = orders.filter((o) => o.status === filters.status);
@@ -335,6 +346,11 @@ class VapehausApiClient {
       }
       return this._wrapSuccess(orders, { total: orders.length });
     });
+
+    if (result.success && Array.isArray(result.data)) {
+      Store.setOrders(result.data);
+    }
+    return result;
   }
 
   async getOrderDetail(id) {
@@ -354,6 +370,32 @@ class VapehausApiClient {
 
   // ── ADMIN: ORDER FULFILLMENT ──────────────────────────────────────────
 
+  async getAdminOrders(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.status && filters.status !== 'all') params.set('status', filters.status);
+    if (filters.search) params.set('q', filters.search);
+    const qs = params.toString();
+
+    const result = await this._request('GET', `/admin/orders${qs ? '?' + qs : ''}`, null, async () => {
+      let orders = Store.getOrders();
+      if (filters.status && filters.status !== 'all') {
+        orders = orders.filter((o) => o.status === filters.status);
+      }
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        orders = orders.filter(
+          (o) => o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q)
+        );
+      }
+      return this._wrapSuccess(orders, { total: orders.length });
+    });
+
+    if (result.success && Array.isArray(result.data)) {
+      Store.setOrders(result.data);
+    }
+    return result;
+  }
+
   async updateOrderStatus(orderId, status, metadata = {}) {
     return this._request(
       'PATCH',
@@ -361,6 +403,18 @@ class VapehausApiClient {
       { status, ...metadata },
       async () => {
         const order = Store.updateOrderStatus(orderId, status, metadata);
+        return this._wrapSuccess(order);
+      }
+    );
+  }
+
+  async shipOrder(orderId, courierName, trackingNumber) {
+    return this._request(
+      'PATCH',
+      `/admin/orders/${orderId}/ship`,
+      { courier_name: courierName, tracking_number: trackingNumber },
+      async () => {
+        const order = Store.updateOrderStatus(orderId, OrderStatus.SHIPPED, { courierName, trackingNumber });
         return this._wrapSuccess(order);
       }
     );
@@ -387,10 +441,37 @@ class VapehausApiClient {
     });
   }
 
+  async getAdminCoupons() {
+    const result = await this._request('GET', '/admin/coupons', null, async () => {
+      return this._wrapSuccess(Store.getCoupons());
+    });
+    if (result.success && Array.isArray(result.data)) {
+      Store.setCoupons(result.data);
+    }
+    return result;
+  }
+
+  async toggleAdminCoupon(id) {
+    return this._request('PATCH', `/admin/coupons/${id}/toggle`, null, async () => {
+      const cpn = Store.getState().coupons.find((c) => c.id === id);
+      if (cpn) {
+        cpn.isActive = !cpn.isActive;
+        Store.save();
+      }
+      return this._wrapSuccess(cpn);
+    });
+  }
+
   async createCoupon(couponPayload) {
     return this._request('POST', '/admin/coupons', couponPayload, async () => {
       const coupon = Store.createCoupon(couponPayload);
       return this._wrapSuccess(coupon, {}, 201);
+    });
+  }
+
+  async getAdminCustomers(page = 1, limit = 50) {
+    return this._request('GET', `/admin/customers?page=${page}&limit=${limit}`, null, async () => {
+      return this._wrapSuccess([]);
     });
   }
 
@@ -465,10 +546,14 @@ class VapehausApiClient {
   }
 
   async getAdminKyc(filters = {}) {
-    return this._request('GET', '/admin/kyc', null, async () => {
+    const result = await this._request('GET', '/admin/kyc', null, async () => {
       const kyc = Store.getState().kycRequests || [];
       return this._wrapSuccess(kyc);
     });
+    if (result.success && Array.isArray(result.data)) {
+      Store.setKycRequests(result.data);
+    }
+    return result;
   }
 
   async reviewKyc(kycId, decision, reason = null) {

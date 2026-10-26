@@ -80,7 +80,7 @@ const OrderTrackerModal = {
       <div class="order-success-body">
         <div class="order-success-icon">${isCancelled ? '❌' : '📦'}</div>
         <h2 style="font-size: 1.6rem;">${isCancelled ? 'Order Cancelled' : 'Order Confirmed & In Progress'}</h2>
-        <div class="order-number-banner">Order #${order.orderNumber}</div>
+        <div class="order-number-banner">Order #${order.orderNumber || order.order_number || order.id}</div>
 
         <!-- 5-Stage Stepper -->
         ${!isCancelled ? `
@@ -121,26 +121,26 @@ const OrderTrackerModal = {
             </div>
             <div>
               <p style="font-size: 0.78rem; color: var(--text-muted);">Payment Method</p>
-              <b>${order.paymentMethod.toUpperCase()} (${order.paymentStatus.toUpperCase()})</b>
+              <b>${(order.paymentMethod || order.payment_method || 'cod').toUpperCase()} (${(order.paymentStatus || order.payment_status || 'unpaid').toUpperCase()})</b>
             </div>
           </div>
 
-          ${order.courierName ? `
+          ${(order.courierName || order.courier_name) ? `
             <div style="border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div>
                 <p style="font-size: 0.78rem; color: var(--text-muted);">Courier Partner</p>
-                <b>🚚 ${order.courierName}</b>
+                <b>🚚 ${order.courierName || order.courier_name}</b>
               </div>
               <div>
                 <p style="font-size: 0.78rem; color: var(--text-muted);">Waybill / Tracking No.</p>
-                <b style="color: var(--accent);">${order.trackingNumber || 'Pending Assignment'}</b>
+                <b style="color: var(--accent);">${order.trackingNumber || order.tracking_number || 'Pending Assignment'}</b>
               </div>
             </div>
           ` : ''}
 
           <div style="border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px;">
             <p style="font-size: 0.78rem; color: var(--text-muted);">Delivery Address</p>
-            <div style="font-size: 0.88rem; color: var(--text);">${order.shippingAddress}</div>
+            <div style="font-size: 0.88rem; color: var(--text);">${order.shippingAddress || order.shipping_address || '—'}</div>
           </div>
         </div>
 
@@ -148,17 +148,25 @@ const OrderTrackerModal = {
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; text-align: left; margin-bottom: 24px;">
           <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 12px;">Items in this Shipment</div>
           <div style="display: flex; flex-direction: column; gap: 10px;">
-            ${order.items.map((it) => `
+            ${(order.items || []).map((it) => {
+              const name = it.productName || it.name || it.snapshotted_name || 'Item';
+              const flavor = it.flavor || it.snapshotted_flavor || '';
+              const nic = it.nicotine || it.snapshotted_nicotine || '';
+              const price = it.price ?? it.unit_price ?? 0;
+              const qty = it.quantity ?? 1;
+              const total = it.total_price ?? (price * qty);
+
+              return `
               <div style="display: flex; justify-content: space-between; font-size: 0.88rem; border-bottom: 1px solid var(--line); padding-bottom: 8px;">
                 <div>
-                  <b>${it.quantity}x ${it.productName}</b>
-                  <div style="font-size: 0.78rem; color: var(--text-muted);">${it.flavor || ''} · ${it.nicotine || ''}</div>
+                  <b>${qty}x ${name}</b>
+                  <div style="font-size: 0.78rem; color: var(--text-muted);">${flavor}${nic ? ` · ${nic}` : ''}</div>
                 </div>
                 <div style="font-weight: 700; color: var(--accent2);">
-                  ${Money.format(it.price * it.quantity)}
+                  ${Money.format(total)}
                 </div>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: 800; margin-top: 14px;">
             <span>Total Paid</span>
