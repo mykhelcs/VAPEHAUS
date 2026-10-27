@@ -914,3 +914,88 @@ Direct URL /admin.html (no session) → Bounced back to /index.html
 ---
 
 > **Next Phase**: Wire [`public/js/api/client.js`](file:///C:/Users/ghjgjhgjgjg/Documents/SCHOOL/Kairus/VAPEHAUS/public/js/api/client.js) `fetch()` transport to actual PHP routes, replacing the local state adapter. Each method already maps 1:1 to the expected API endpoints.
+
+
+==============================================================================================================
+
+
+VAPEHAUS: Supabase & PayMongo In-Page Overlay Integration
+
+This walkthrough details the complete implementation for integrating Supabase (PostgreSQL + Storage) and PayMongo (Payment Intent in-page tab overlay) into the VAPEHAUS platform.
+
+1. What Was Implemented
+1. Database & Persistence Layer (Supabase PostgreSQL)
+Supabase PostgreSQL Schema File: Created database/supabase_schema.sql containing all 18 normalized tables, foreign keys, cascade triggers, indexes, and automated Row Level Security (RLS) policies for anonymous and authenticated roles.
+Supabase Storage Bucket: Added SQL for the kyc-documents bucket with secure upload policies (allowing users to upload ID photos while denying unauthorized public downloads).
+Environment & Hosting:
+Updated .env.example with Supabase and PayMongo configurations.
+Updated render.yaml with production environment keys for 1-click cloud deployment.
+2. Infrastructure & Execution Layer (TDD & framework.md compliant)
+PayMongoGateway.php: Server-side adapter that communicates with the PayMongo v1 Payment Intent API via cURL and verifies webhook authenticity using HMAC-SHA256.
+CreatePaymentIntentExecution.php: Execution use case that orchestrates order retrieval, total calculation (converting PHP currency to centavos), and intent creation.
+CreatePaymentIntentExecutionTest.php: Automated unit tests verifying intent creation and HMAC signature validation.
+3. Presentation Layer (HTTP Dispatchers & Routing)
+Request.php: Added getRawBody() to capture unmodified HTTP request payload for webhook signature checks.
+PaymentIntentController.php: Thin HTTP dispatcher exposing POST /api/v1/payments/intent.
+PaymentWebhookController.php: Updated to authenticate incoming PayMongo webhook events via paymongo-signature header before marking orders paid.
+App.php: Registered payment routes and injected dependencies.
+4. Front-End In-Page Overlay Experience (No External Redirects)
+public/index.html: Included PayMongo.js SDK (https://js.paymongo.com/v2/paymongo.js) and Supabase JS SDK (@supabase/supabase-js@2).
+public/js/config.js: Added PAYMONGO_PUBLIC_KEY, SUPABASE_URL, and SUPABASE_ANON_KEY.
+public/js/api/client.js: Added createPaymentIntent(orderId) with deterministic local fallback.
+public/js/components/checkout.js:
+COD: Completes immediately without invoking external payment.
+GCash / Maya / Card: Renders a small in-page overlay tab right inside the checkout modal. Mounts the PayMongo Credit/Debit Card element or E-Wallet confirmation button directly within the page, keeping the customer on your website.
+public/js/storefront.js: Integrated direct client upload for 18+ statutory government ID photos to Supabase Storage kyc-documents bucket.
+public/css/storefront.css: Added styling for the in-page .paymongo-overlay-tab.
+2. Configuration & Keys Guide
+Keys Summary
+Variable	Location	Client vs Server	Purpose
+DATABASE_URL	.env	Server only	Direct PostgreSQL connection string to Supabase
+DB_DRIVER	.env	Server only	Set to pgsql
+SUPABASE_URL	.env + config.js	Client & Server	e.g., https://[PROJECT-REF].supabase.co
+SUPABASE_ANON_KEY	.env + config.js	Browser safe	Used by browser to upload KYC images to Supabase Storage
+SUPABASE_SERVICE_KEY	.env	Server only	Listed for documentation / admin tools
+PAYMONGO_SECRET_KEY	.env	Server only	Used by PHP PayMongoGateway to create payment intents
+PAYMONGO_PUBLIC_KEY	.env + config.js	Browser safe	Initializing PayMongo.js in the checkout overlay
+PAYMONGO_WEBHOOK_SECRET	.env	Server only	Verifying webhook event signatures
+3. How to Set Up Supabase
+Open your Supabase Dashboard
+ and create or select your project.
+Go to SQL Editor -> New query.
+Open database/supabase_schema.sql, copy its entire contents, paste it into the SQL editor, and click Run.
+Go to Project Settings -> Database -> Connection string -> URI. Copy the URI and replace [YOUR-PASSWORD] with your database password:
+env
+DATABASE_URL=postgresql://postgres:YourPasswordHere@db.yourprojectref.supabase.co:5432/postgres
+DB_DRIVER=pgsql
+Go to Project Settings -> API. Copy the Project URL and anon public key into your .env and public/js/config.js.
+4. How to Set Up PayMongo
+Sign in to your PayMongo Dashboard
+.
+Go to Developers -> API Keys:
+Copy Secret Key (sk_test_... or sk_live_...) into .env as PAYMONGO_SECRET_KEY.
+Copy Public Key (pk_test_... or pk_live_...) into .env and public/js/config.js as PAYMONGO_PUBLIC_KEY.
+Go to Developers -> Webhooks -> Add Webhook:
+URL: https://your-domain.onrender.com/api/v1/payments/webhook (or your ngrok URL for local dev)
+Events: Select payment.paid, payment.failed
+Copy the generated Webhook Secret (whsec_...) into .env as PAYMONGO_WEBHOOK_SECRET.
+5. Verification & Testing
+Test Suite Execution
+
+Run the automated test runner:
+
+bash
+php tests/TestRunner.php
+
+CreatePaymentIntentExecutionTest executes unit tests for:
+
+Payment Intent creation with exact centavos conversion.
+Validation of order existence.
+HMAC-SHA256 signature verification for PayMongo webhooks.
+Checkout Flow Verification
+Open public/index.html in your browser.
+Add any vape product to your cart and click Checkout.
+Complete Step 1 (Contact) and Step 2 (Address).
+In Step 3 (Payment):
+Choose Cash on Delivery (COD): Order completes immediately.
+Choose Card or GCash / Maya: The checkout modal transitions into the in-page PayMongo overlay tab where the payment is mounted and processed without leaving the website.

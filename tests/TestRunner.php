@@ -19,6 +19,7 @@ $testClasses = [
     \Vapehaus\Tests\Unit\Execution\RegisterUserExecutionTest::class,
     \Vapehaus\Tests\Unit\Execution\AddToCartExecutionTest::class,
     \Vapehaus\Tests\Unit\Execution\PlaceOrderExecutionTest::class,
+    \Vapehaus\Tests\Unit\Execution\CreatePaymentIntentExecutionTest::class,
 
     // API Integration Tests
     \Vapehaus\Tests\Integration\Api\AuthApiTest::class,

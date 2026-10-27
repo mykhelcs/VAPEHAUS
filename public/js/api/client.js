@@ -320,6 +320,16 @@ class VapehausApiClient {
 
   // ── CHECKOUT & ORDERS ─────────────────────────────────────────────────
 
+  async createPaymentIntent(orderId) {
+    return this._request('POST', '/payments/intent', { order_id: orderId }, async () => {
+      return this._wrapSuccess({
+        payment_intent_id: 'pi_mock_' + Math.random().toString(36).substring(2, 10),
+        client_key: 'pi_client_mock_key',
+        amount_centavos: 0,
+      });
+    });
+  }
+
   async checkout(orderPayload) {
     return this._request('POST', '/checkout', orderPayload, async () => {
       const order = Store.placeOrder(orderPayload);

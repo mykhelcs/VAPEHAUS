@@ -34,13 +34,16 @@ use Vapehaus\Execution\Order\CancelOrderExecution;
 use Vapehaus\Execution\Order\GetOrderDetailExecution;
 use Vapehaus\Execution\Order\GetUserOrdersExecution;
 use Vapehaus\Execution\Order\PlaceOrderExecution;
+use Vapehaus\Execution\Payment\CreatePaymentIntentExecution;
 use Vapehaus\Execution\Payment\PaymentExecution;
 use Vapehaus\Execution\Review\ReviewExecution;
 use Vapehaus\Execution\Rma\RmaExecution;
 use Vapehaus\Execution\Wishlist\WishlistExecution;
 use Vapehaus\Infrastructure\Database\DatabaseConnection;
 use Vapehaus\Infrastructure\Database\SchemaManager;
+use Vapehaus\Infrastructure\Environment\Env;
 use Vapehaus\Infrastructure\Notification\PdoNotificationService;
+use Vapehaus\Infrastructure\Payment\PayMongoGateway;
 use Vapehaus\Infrastructure\Repository\PdoAddressRepository;
 use Vapehaus\Infrastructure\Repository\PdoCartRepository;
 use Vapehaus\Infrastructure\Repository\PdoCategoryRepository;
@@ -65,6 +68,7 @@ use Vapehaus\Presentation\Controller\CatalogController;
 use Vapehaus\Presentation\Controller\CouponController;
 use Vapehaus\Presentation\Controller\KycController;
 use Vapehaus\Presentation\Controller\OrderController;
+use Vapehaus\Presentation\Controller\PaymentIntentController;
 use Vapehaus\Presentation\Controller\PaymentWebhookController;
 use Vapehaus\Presentation\Controller\ReviewController;
 use Vapehaus\Presentation\Controller\RmaController;
@@ -166,6 +170,9 @@ final class App
         $wishlistExec = new WishlistExecution($wishlistRepo, $productRepo);
         $paymentExec = new PaymentExecution($paymentRepo, $orderRepo, $productRepo, $auditRepo);
 
+        $paymongoGateway = new PayMongoGateway((string) Env::get('PAYMONGO_SECRET_KEY', ''));
+        $createPaymentIntentExec = new CreatePaymentIntentExecution($paymongoGateway, $orderRepo);
+
         $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo);
         $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
         $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);
@@ -187,7 +194,8 @@ final class App
         $kycController = new KycController($kycExec);
         $rmaController = new RmaController($rmaExec);
         $wishlistController = new WishlistController($wishlistExec);
-        $paymentController = new PaymentWebhookController($paymentExec);
+        $paymentController = new PaymentWebhookController($paymentExec, $paymongoGateway);
+        $paymentIntentController = new PaymentIntentController($createPaymentIntentExec);
         $adminController = new AdminController(
             $adminDashboardExec,
             $adminCategoryExec,
@@ -256,9 +264,11 @@ final class App
         $this->router->post('/api/v1/cart/coupon', fn (Request $r) => $couponController->apply($r), [$authOptional]);
         $this->router->delete('/api/v1/cart/coupon', fn (Request $r) => $couponController->remove($r), [$authOptional]);
 
-        // 9. Checkout & Payment Webhooks
+        // 9. Checkout & Payment Endpoints & Webhooks
         $this->router->post('/api/v1/checkout', fn (Request $r) => $orderController->checkout($r), [$authOptional]);
+        $this->router->post('/api/v1/payments/intent', fn (Request $r) => $paymentIntentController->create($r), [$authOptional]);
         $this->router->post('/api/v1/webhooks/payments', fn (Request $r) => $paymentController->handleWebhook($r));
+        $this->router->post('/api/v1/payments/webhook', fn (Request $r) => $paymentController->handleWebhook($r));
 
         // 10. Admin Endpoints
         $this->router->get('/api/v1/admin/dashboard', fn (Request $r) => $adminController->getDashboard($r), [$authRequired, $adminOnly]);

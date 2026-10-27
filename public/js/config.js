@@ -33,6 +33,9 @@ const CONFIG = {
     SESSION_TOKEN: 'VAPEHAUS_SESSION_TOKEN',
   },
   API_BASE_URL: '/api/v1',
+  PAYMONGO_PUBLIC_KEY: 'pk_test_YOUR_PAYMONGO_PUBLIC_KEY',
+  SUPABASE_URL: 'https://YOUR-PROJECT-REF.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   DEFAULT_USER: {
     id: 'usr_customer_default',
     email: 'customer@vapehaus.ph',

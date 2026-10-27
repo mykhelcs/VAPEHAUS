@@ -315,10 +315,19 @@ const CheckoutModal = {
       return;
     }
 
-    const fullAddress = `${this.formData.addressLine1}, ${this.formData.barangay ? this.formData.barangay + ', ' : ''}${this.formData.city}, ${this.formData.province} ${this.formData.postalCode}`;
+    const fullAddress = [
+      this.formData.addressLine1,
+      this.formData.barangay ? this.formData.barangay + ',' : '',
+      this.formData.city,
+      this.formData.province,
+      this.formData.postalCode,
+    ].filter(Boolean).join(' ');
 
-    const submitBtn = document.querySelector('.btn-place-order');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Placing order…'; }
+    const submitBtn = this.overlayEl ? this.overlayEl.querySelector('.btn-place-order, .btn-cyan') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating Order…';
+    }
 
     try {
       const result = await Api.checkout({
@@ -336,21 +345,211 @@ const CheckoutModal = {
       });
 
       if (!result.success) {
-        Toast.error(result.error.message || 'Checkout failed. Please try again.');
+        Toast.error(result.error?.message || 'Checkout failed. Please try again.');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
         return;
       }
 
       const order = result.data;
-      Toast.success(`Order #${order.orderNumber} placed successfully!`);
-      this.close();
 
-      if (typeof OrderTrackerModal !== 'undefined') {
-        OrderTrackerModal.showOrder(order.id);
+      // Option 1: Cash on Delivery (COD) - No external gateway needed
+      if (this.formData.paymentMethod === 'cod') {
+        Toast.success(`Order #${order.orderNumber} placed! Pay upon delivery. 🛵`);
+        this.close();
+        if (typeof CartDrawer !== 'undefined') CartDrawer.render();
+        if (typeof OrderTrackerModal !== 'undefined') {
+          OrderTrackerModal.showOrder(order.id);
+        }
+        return;
       }
+
+      // Option 2: PayMongo E-Wallets & Card (Render in-page small overlay tab)
+      await this._renderPayMongoOverlayTab(order);
     } catch (err) {
       Toast.error(err.message || 'An unexpected error occurred during checkout.');
-    } finally {
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
+    }
+  },
+
+  async _renderPayMongoOverlayTab(order) {
+    const bodyEl = document.getElementById('checkout-modal-body');
+    if (!bodyEl) return;
+
+    Toast.info('Connecting to PayMongo secure gateway…');
+
+    // Create Payment Intent via PHP Backend
+    const intentRes = await Api.createPaymentIntent(order.id);
+    if (!intentRes.success) {
+      Toast.error(intentRes.error?.message || 'Failed to initialize payment gateway.');
+      return;
+    }
+
+    const { client_key, amount_centavos } = intentRes.data;
+    const method = this.formData.paymentMethod; // 'gcash', 'maya', or 'card'
+    const formattedAmount = (amount_centavos > 0)
+      ? Money.format(amount_centavos / 100)
+      : Money.format(order.total);
+
+    bodyEl.innerHTML = `
+      <div class="paymongo-overlay-tab">
+        <div class="paymongo-badge-bar">
+          <div style="font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+            <span>🔐</span> PayMongo Express Checkout
+          </div>
+          <div class="paymongo-security-tag">
+            <span>🛡️</span> 256-Bit Encrypted
+          </div>
+        </div>
+
+        <div style="background: var(--surface); padding: 14px 18px; border-radius: var(--r-md); margin-bottom: 20px; border: 1px solid var(--line);">
+          <div style="display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--text-muted); margin-bottom: 4px;">
+            <span>Order Reference</span>
+            <b style="color: var(--text);">#${order.orderNumber}</b>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--text-muted);">
+            <span>Total Payable</span>
+            <b style="color: var(--accent2); font-size: 1.15rem;">${formattedAmount}</b>
+          </div>
+        </div>
+
+        <div id="pm-element-container" class="paymongo-input-frame">
+          ${method === 'card' ? `
+            <div style="margin-bottom: 12px; font-size: 0.86rem; font-weight: 600;">Credit / Debit Card</div>
+            <div id="pm-card-mount" style="min-height: 44px; display: grid; align-items: center; color: var(--text-muted); font-size: 0.84rem;">
+              Loading secure card form…
+            </div>
+          ` : `
+            <div style="text-align: center; padding: 16px 8px;">
+              <div style="font-size: 2.2rem; margin-bottom: 8px;">${method === 'gcash' ? '📱' : '💳'}</div>
+              <div style="font-weight: 700; margin-bottom: 6px;">${method === 'gcash' ? 'GCash' : 'Maya'} E-Wallet Payment</div>
+              <p style="color: var(--text-muted); font-size: 0.84rem; margin: 0 auto; max-width: 380px;">
+                Authenticate seamlessly with your ${method === 'gcash' ? 'GCash' : 'Maya'} account. Confirmation will be verified automatically.
+              </p>
+            </div>
+          `}
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+          <button class="btn btn-secondary" style="flex: 1;" onclick="CheckoutModal.close()">Cancel / Pay Later</button>
+          <button class="btn btn-lg btn-cyan" style="flex: 2;" id="btn-pm-confirm-pay">
+            ${method === 'card' ? 'Pay ' + formattedAmount : 'Proceed with ' + (method === 'gcash' ? 'GCash' : 'Maya')}
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Initialize PayMongo JS SDK if present
+    const payBtn = document.getElementById('btn-pm-confirm-pay');
+    if (!payBtn) return;
+
+    if (typeof window.PayMongo !== 'undefined' && CONFIG.PAYMONGO_PUBLIC_KEY && !CONFIG.PAYMONGO_PUBLIC_KEY.includes('YOUR_PAYMONGO')) {
+      try {
+        const pm = window.PayMongo(CONFIG.PAYMONGO_PUBLIC_KEY);
+
+        if (method === 'card') {
+          const elements = pm.elements();
+          const cardElement = elements.create('card');
+          cardElement.mount('#pm-card-mount');
+
+          payBtn.onclick = async () => {
+            payBtn.disabled = true;
+            payBtn.textContent = 'Processing Payment…';
+
+            try {
+              const result = await pm.confirmPayment({
+                elements,
+                clientKey: client_key,
+                confirmParams: {
+                  return_url: window.location.href,
+                },
+              });
+
+              if (result.error) {
+                Toast.error(result.error.message || 'Payment authentication failed.');
+                payBtn.disabled = false;
+                payBtn.textContent = 'Retry Payment';
+              } else {
+                Toast.success('Payment approved! Your order is confirmed. 🎉');
+                CheckoutModal.close();
+                if (typeof OrderTrackerModal !== 'undefined') OrderTrackerModal.showOrder(order.id);
+              }
+            } catch (cardErr) {
+              Toast.error(cardErr.message || 'Card payment failed.');
+              payBtn.disabled = false;
+              payBtn.textContent = 'Retry Payment';
+            }
+          };
+        } else {
+          // GCash / Maya
+          payBtn.onclick = async () => {
+            payBtn.disabled = true;
+            payBtn.textContent = 'Authorizing…';
+
+            try {
+              const pmType = method === 'maya' ? 'paymaya' : 'gcash';
+              const result = await pm.createPaymentMethod({
+                type: pmType,
+              });
+
+              if (result.error) {
+                Toast.error(result.error.message);
+                payBtn.disabled = false;
+                payBtn.textContent = 'Retry';
+                return;
+              }
+
+              // Attach and confirm intent
+              const confirmRes = await pm.confirmPayment({
+                paymentMethodId: result.data.id,
+                clientKey: client_key,
+                confirmParams: {
+                  return_url: window.location.href,
+                },
+              });
+
+              if (confirmRes.error) {
+                Toast.error(confirmRes.error.message);
+                payBtn.disabled = false;
+                payBtn.textContent = 'Retry';
+              } else {
+                Toast.success('E-Wallet payment initiated!');
+              }
+            } catch (pmErr) {
+              Toast.error(pmErr.message || 'Payment initiation error.');
+              payBtn.disabled = false;
+            }
+          };
+        }
+      } catch (sdkInitErr) {
+        console.warn('PayMongo SDK initialization fallback:', sdkInitErr);
+      }
+    } else {
+      // Local fallback / Offline sandbox simulation when keys not yet set
+      const cardMount = document.getElementById('pm-card-mount');
+      if (cardMount) {
+        cardMount.innerHTML = `
+          <div style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+            🧪 <b>PayMongo Sandbox Simulation Mode:</b><br>
+            Public key not yet configured in <code>config.js</code>. Ready to simulate order payment completion.
+          </div>
+        `;
+      }
+
+      payBtn.onclick = async () => {
+        payBtn.disabled = true;
+        payBtn.textContent = 'Simulating Payment…';
+        await new Promise(r => setTimeout(r, 800));
+
+        // Mark order paid in Store
+        if (typeof Store !== 'undefined') {
+          Store.updateOrderStatus(order.id, 'processing', { paymentStatus: 'paid' });
+        }
+        Toast.success(`Payment of ${formattedAmount} confirmed successfully! 🎉`);
+        CheckoutModal.close();
+        if (typeof OrderTrackerModal !== 'undefined') {
+          OrderTrackerModal.showOrder(order.id);
+        }
+      };
     }
   },
 };

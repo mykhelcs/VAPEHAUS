@@ -16,6 +16,7 @@ final class Request
     private array $headers;
     /** @var array<string, mixed> */
     private array $attributes = [];
+    private string $rawBody;
 
     /**
      * @param array<string, mixed> $queryParams
@@ -27,12 +28,14 @@ final class Request
         string $path,
         array $queryParams = [],
         array $body = [],
-        array $headers = []
+        array $headers = [],
+        string $rawBody = ''
     ) {
         $this->method = strtoupper($method);
         $this->path = '/' . trim(parse_url($path, PHP_URL_PATH) ?? '/', '/');
         $this->queryParams = $queryParams;
         $this->body = $body;
+        $this->rawBody = $rawBody;
 
         $normalizedHeaders = [];
         foreach ($headers as $k => $v) {
@@ -56,7 +59,7 @@ final class Request
             }
         }
 
-        $rawBody = file_get_contents('php://input');
+        $rawBody = file_get_contents('php://input') ?: '';
         $body = [];
         if (!empty($rawBody)) {
             $decoded = json_decode($rawBody, true);
@@ -67,7 +70,7 @@ final class Request
             $body = $_POST;
         }
 
-        return new self($method, $uri, $_GET ?? [], $body, $headers);
+        return new self($method, $uri, $_GET ?? [], $body, $headers, $rawBody);
     }
 
     public function getMethod(): string
@@ -101,6 +104,11 @@ final class Request
         return $this->body;
     }
 
+    public function getRawBody(): string
+    {
+        return $this->rawBody;
+    }
+
     public function getBodyParam(string $key, mixed $default = null): mixed
     {
         return $this->body[$key] ?? $default;
@@ -124,6 +132,13 @@ final class Request
     {
         $clone = clone $this;
         $clone->attributes[$key] = $value;
+        return $clone;
+    }
+
+    public function withBody(array $body): self
+    {
+        $clone = clone $this;
+        $clone->body = $body;
         return $clone;
     }
 

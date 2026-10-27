@@ -13,6 +13,8 @@ services:
         value: false
       - key: APP_SECRET_KEY
         generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: DB_DRIVER
@@ -25,3 +27,15 @@ services:
         value: 250
       - key: SHIPPING_FREE_THRESHOLD
         value: 1500
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: PAYMONGO_SECRET_KEY
+        sync: false
+      - key: PAYMONGO_PUBLIC_KEY
+        sync: false
+      - key: PAYMONGO_WEBHOOK_SECRET
+        sync: false
+      - key: MINIMUM_LEGAL_AGE
+        value: 18
