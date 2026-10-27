@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <defs>
+    <linearGradient id="vhGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+
+    <linearGradient id="surfaceGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A26" />
+      <stop offset="100%" stop-color="#0E0E16" />
+    </linearGradient>
+
+    <filter id="neonGlowIcon" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base Badge -->
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#surfaceGradIcon)" stroke="url(#vhGradIcon)" stroke-width="2" />
+  
+  <!-- Architectural HAUS Roof Accent -->
+  <path d="M 16 9 L 24 4 L 32 9" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  
+  <!-- Geometric V-Wing Wings -->
+  <path d="M 12 15 L 22.8 34.5 C 23.3 35.3 24.7 35.3 25.2 34.5 L 36 15 C 36.6 13.9 35.8 12.5 34.4 12.5 L 30.8 12.5 C 30.1 12.5 29.4 13 29 13.7 L 24 22.8 L 19 13.7 C 18.6 13 17.9 12.5 17.2 12.5 L 13.6 12.5 C 12.2 12.5 11.4 13.9 12 15 Z" fill="url(#vhGradIcon)" filter="url(#neonGlowIcon)"/>
+
+  <!-- Central Vapor Glow Core -->
+  <circle cx="24" cy="27" r="2.6" fill="#22D3EE" filter="url(#neonGlowIcon)" />
+</svg>

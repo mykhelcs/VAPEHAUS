@@ -424,3 +424,19 @@
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .kyc-grid { grid-template-columns: 1fr; }
 }
+
+
+/* VAPEHAUS ADMIN LOGO ENHANCEMENTS */
+.admin-brand .logo {
+  display: inline-flex !important;
+  align-items: center !important;
+  text-decoration: none !important;
+  transition: var(--transition-fast) !important;
+}
+
+.admin-brand .logo-img {
+  height: 36px;
+  width: auto;
+  max-width: 180px;
+  display: block;
+}

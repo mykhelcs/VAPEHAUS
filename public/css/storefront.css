@@ -1620,3 +1620,32 @@ footer.store-footer {
   padding: 16px;
   margin-bottom: 16px;
 }
+
+
+/* VAPEHAUS BRAND LOGO ENHANCEMENTS */
+.logo {
+  display: inline-flex !important;
+  align-items: center !important;
+  text-decoration: none !important;
+  transition: var(--transition-fast) !important;
+}
+
+.logo:hover {
+  filter: drop-shadow(0 0 14px var(--accent-glow)) !important;
+  transform: translateY(-1px);
+}
+
+.logo-img {
+  height: 42px;
+  width: auto;
+  max-width: 230px;
+  display: block;
+}
+
+.logo-img-footer {
+  height: 38px;
+  width: auto;
+  max-width: 210px;
+  display: block;
+  margin-bottom: 14px;
+}

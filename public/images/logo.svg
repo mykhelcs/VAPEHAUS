@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 48" width="230" height="48" fill="none">
+  <defs>
+    <!-- Neon Gradient Purple to Cyan -->
+    <linearGradient id="vhGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6" />
+      <stop offset="50%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+
+    <!-- Cyan Highlight Gradient -->
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+
+    <!-- Deep Surface Gradient for Icon Base -->
+    <linearGradient id="surfaceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A26" />
+      <stop offset="100%" stop-color="#0E0E16" />
+    </linearGradient>
+
+    <!-- Soft Neon Glow -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 1. Geometric Icon Badge (Haus Crest + Vapor V) -->
+  <g transform="translate(3, 4)">
+    <!-- Base Plate -->
+    <rect x="0" y="0" width="40" height="40" rx="10" fill="url(#surfaceGrad)" stroke="url(#vhGrad)" stroke-width="1.6" />
+    
+    <!-- Architectural HAUS Roof Accent -->
+    <path d="M 13 8 L 20 3.5 L 27 8" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    
+    <!-- Geometric V-Wing Wings -->
+    <path d="M 10 13 L 19.1 30.5 C 19.5 31.2 20.5 31.2 20.9 30.5 L 30 13 C 30.5 12 29.8 11 28.5 11 L 25.5 11 C 24.8 11 24.2 11.4 23.9 12 L 20 20 L 16.1 12 C 15.8 11.4 15.2 11 14.5 11 L 11.5 11 C 10.2 11 9.5 12 10 13 Z" fill="url(#vhGrad)" filter="url(#neonGlow)"/>
+
+    <!-- Central Vapor Glow Core -->
+    <circle cx="20" cy="24" r="2.2" fill="#22D3EE" filter="url(#neonGlow)" />
+  </g>
+
+  <!-- 2. Brand Typography -->
+  <g transform="translate(54, 30)">
+    <!-- "VAPE" (Crisp Bright Platinum) -->
+    <text x="0" y="0" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="22" letter-spacing="0.05em" fill="#F4F4F8">VAPE</text>
+    
+    <!-- "HAUS" (Cyber Cyan) -->
+    <text x="64" y="0" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="22" letter-spacing="0.05em" fill="url(#cyanGrad)">HAUS</text>
+    
+    <!-- Subtitle Pill / Descriptor -->
+    <text x="1" y="10" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="6.5" letter-spacing="0.26em" fill="#9494A8">PREMIUM VAPOR CO.</text>
+  </g>
+</svg>
