@@ -9,6 +9,9 @@ use Vapehaus\Execution\Address\AddressExecution;
 use Vapehaus\Execution\Admin\AdminCreateCategoryExecution;
 use Vapehaus\Execution\Admin\AdminCreateProductExecution;
 use Vapehaus\Execution\Admin\AdminCreateVariantExecution;
+use Vapehaus\Execution\Admin\AdminDeleteProductExecution;
+use Vapehaus\Execution\Admin\UploadProductImageExecution;
+use Vapehaus\Execution\System\CheckDatabaseHealthExecution;
 use Vapehaus\Execution\Admin\AdminGetDashboardExecution;
 use Vapehaus\Execution\Admin\AdminListCustomersExecution;
 use Vapehaus\Execution\Admin\AdminListOrdersExecution;
@@ -173,7 +176,10 @@ final class App
         $paymongoGateway = new PayMongoGateway((string) Env::get('PAYMONGO_SECRET_KEY', ''));
         $createPaymentIntentExec = new CreatePaymentIntentExecution($paymongoGateway, $orderRepo);
 
-        $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo);
+        $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo, $this->pdo);
+        $adminDeleteProductExec = new AdminDeleteProductExecution($productRepo);
+        $uploadImageExec = new UploadProductImageExecution();
+        $checkDbHealthExec = new CheckDatabaseHealthExecution($this->pdo);
         $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
         $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);
         $adminVariantExec = new AdminCreateVariantExecution($productRepo);
@@ -207,7 +213,10 @@ final class App
             $adminStatusExec,
             $adminCustomersExec,
             $shipOrderExec,
-            $auditRepo
+            $auditRepo,
+            $adminDeleteProductExec,
+            $uploadImageExec,
+            $checkDbHealthExec
         );
 
         // 1. Auth Endpoints
@@ -274,6 +283,10 @@ final class App
         $this->router->get('/api/v1/admin/dashboard', fn (Request $r) => $adminController->getDashboard($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/categories', fn (Request $r) => $adminController->createCategory($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/products', fn (Request $r) => $adminController->createProduct($r), [$authRequired, $adminOnly]);
+        $this->router->delete('/api/v1/admin/products/{id}', fn (Request $r, array $p) => $adminController->deleteProduct($r, $p), [$authRequired, $adminOnly]);
+        $this->router->post('/api/v1/admin/upload-image', fn (Request $r) => $adminController->uploadImage($r), [$authRequired, $adminOnly]);
+        $this->router->get('/api/v1/admin/db-health', fn (Request $r) => $adminController->getDatabaseHealth($r), [$authRequired, $adminOnly]);
+        $this->router->get('/api/v1/health', fn (Request $r) => $adminController->getDatabaseHealth($r));
         $this->router->post('/api/v1/admin/products/{id}/variants', fn (Request $r, array $p) => $adminController->createVariant($r, $p), [$authRequired, $adminOnly]);
         
         // Admin Inventory adjustments (both /variants/{id}/stock and /inventory/{id})

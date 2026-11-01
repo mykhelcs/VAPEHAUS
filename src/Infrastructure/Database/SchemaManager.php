@@ -16,8 +16,26 @@ final class SchemaManager
         $this->pdo = $pdo;
     }
 
+    private function getDriver(): string
+    {
+        return strtolower((string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
+    }
+
+    /**
+     * Returns the appropriate timestamp type for the active database driver.
+     * SQLite accepts DATETIME; PostgreSQL requires TIMESTAMP.
+     */
+    private function ts(bool $nullable = false): string
+    {
+        $type = $this->getDriver() === 'pgsql' ? 'TIMESTAMP' : 'DATETIME';
+        return $nullable ? $type : $type . ' NOT NULL';
+    }
+
     public function createTables(): void
     {
+        $ts     = $this->ts();      // e.g. "TIMESTAMP NOT NULL"
+        $tsNull = $this->ts(true);  // e.g. "TIMESTAMP"
+
         $queries = [
             // 1. Users
             "CREATE TABLE IF NOT EXISTS users (
@@ -30,7 +48,7 @@ final class SchemaManager
                 role VARCHAR(20) NOT NULL DEFAULT 'customer',
                 birth_date DATE,
                 is_age_verified INTEGER NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL
+                created_at {$ts}
             );",
 
             // 2. Categories
@@ -39,6 +57,7 @@ final class SchemaManager
                 name VARCHAR(100) NOT NULL,
                 slug VARCHAR(100) NOT NULL UNIQUE,
                 description TEXT,
+                image_url TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1
             );",
 
@@ -50,10 +69,11 @@ final class SchemaManager
                 slug VARCHAR(200) NOT NULL UNIQUE,
                 brand VARCHAR(100) NOT NULL,
                 description TEXT,
+                image_url TEXT,
                 average_rating DECIMAL(3,2) NOT NULL DEFAULT 0.00,
                 review_count INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
             );",
 
@@ -76,7 +96,7 @@ final class SchemaManager
                 user_id VARCHAR(64),
                 session_token VARCHAR(128),
                 applied_coupon_code VARCHAR(64),
-                updated_at DATETIME NOT NULL
+                updated_at {$ts}
             );",
 
             // 6. Cart Items
@@ -106,9 +126,9 @@ final class SchemaManager
                 tracking_number VARCHAR(100),
                 courier_name VARCHAR(100),
                 tracking_url TEXT,
-                shipped_at DATETIME,
-                delivered_at DATETIME,
-                created_at DATETIME NOT NULL,
+                shipped_at {$tsNull},
+                delivered_at {$tsNull},
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );",
 
@@ -140,7 +160,7 @@ final class SchemaManager
                 province VARCHAR(100) NOT NULL,
                 postal_code VARCHAR(20) NOT NULL,
                 is_default INTEGER NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );",
 
@@ -154,9 +174,9 @@ final class SchemaManager
                 max_discount DECIMAL(10,2),
                 usage_limit INTEGER NOT NULL DEFAULT 0,
                 times_used INTEGER NOT NULL DEFAULT 0,
-                expires_at DATETIME,
+                expires_at {$tsNull},
                 is_active INTEGER NOT NULL DEFAULT 1,
-                created_at DATETIME NOT NULL
+                created_at {$ts}
             );",
 
             "CREATE TABLE IF NOT EXISTS coupon_redemptions (
@@ -165,7 +185,7 @@ final class SchemaManager
                 user_id VARCHAR(64) NOT NULL,
                 order_id VARCHAR(64) NOT NULL,
                 discount_amount DECIMAL(10,2) NOT NULL,
-                redeemed_at DATETIME NOT NULL,
+                redeemed_at {$ts},
                 FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
@@ -181,7 +201,7 @@ final class SchemaManager
                 comment TEXT NOT NULL,
                 is_verified_buyer INTEGER NOT NULL DEFAULT 0,
                 status VARCHAR(30) NOT NULL DEFAULT 'approved',
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );",
@@ -196,8 +216,8 @@ final class SchemaManager
                 back_image_url TEXT,
                 status VARCHAR(30) NOT NULL DEFAULT 'pending',
                 rejection_reason TEXT,
-                verified_at DATETIME,
-                created_at DATETIME NOT NULL,
+                verified_at {$tsNull},
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );",
 
@@ -212,7 +232,7 @@ final class SchemaManager
                 photo_url TEXT,
                 status VARCHAR(30) NOT NULL DEFAULT 'requested',
                 admin_notes TEXT,
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
@@ -223,7 +243,7 @@ final class SchemaManager
                 id VARCHAR(64) PRIMARY KEY,
                 user_id VARCHAR(64) NOT NULL,
                 product_id VARCHAR(64) NOT NULL,
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
             );",
@@ -232,8 +252,8 @@ final class SchemaManager
                 id VARCHAR(64) PRIMARY KEY,
                 user_id VARCHAR(64) NOT NULL,
                 variant_id VARCHAR(64) NOT NULL,
-                notified_at DATETIME,
-                created_at DATETIME NOT NULL,
+                notified_at {$tsNull},
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
             );",
@@ -247,7 +267,7 @@ final class SchemaManager
                 amount DECIMAL(10,2) NOT NULL,
                 status VARCHAR(30) NOT NULL,
                 raw_payload TEXT,
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
             );",
 
@@ -260,7 +280,7 @@ final class SchemaManager
                 delta INTEGER NOT NULL,
                 reason VARCHAR(50) NOT NULL,
                 actor_id VARCHAR(64),
-                created_at DATETIME NOT NULL,
+                created_at {$ts},
                 FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
             );",
 
@@ -271,27 +291,88 @@ final class SchemaManager
                 channel VARCHAR(30) NOT NULL,
                 subject VARCHAR(200) NOT NULL,
                 body TEXT NOT NULL,
-                sent_at DATETIME NOT NULL
+                sent_at {$ts}
             );",
 
             // 18. Server Sessions (Bearer tokens)
             "CREATE TABLE IF NOT EXISTS sessions (
-                token VARCHAR(128) PRIMARY KEY,
+                token VARCHAR(512) PRIMARY KEY,
                 user_id VARCHAR(64) NOT NULL,
                 ip_address VARCHAR(45),
                 user_agent TEXT,
-                expires_at DATETIME NOT NULL,
-                created_at DATETIME NOT NULL,
+                expires_at {$ts},
+                created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );"
         ];
 
         foreach ($queries as $sql) {
-            $this->pdo->exec($sql);
+            try {
+                $this->pdo->exec($sql);
+            } catch (\PDOException $e) {
+                // On PostgreSQL (Supabase), tables may already exist with different column types
+                // from a prior schema deployment. CREATE TABLE IF NOT EXISTS will skip creation
+                // but FK constraints may still fail on re-runs. Silently skip FK/type conflicts.
+                $pgErrorCode = $e->getCode();
+                // 42P07 = duplicate table, 42804 = datatype mismatch (FK type conflict)
+                // 42710 = duplicate object (index/constraint), 23505 = unique violation
+                if (!in_array($pgErrorCode, ['42P07', '42804', '42710', '23505'], true)) {
+                    throw $e;
+                }
+            }
+        }
+
+        // Automatic migration: ensure image_url column exists in products table for existing databases
+        try {
+            $driver = $this->getDriver();
+            if ($driver === 'sqlite') {
+                $cols = $this->pdo->query("PRAGMA table_info(products)")->fetchAll(PDO::FETCH_ASSOC);
+                $hasImageUrl = false;
+                foreach ($cols as $col) {
+                    if (($col['name'] ?? '') === 'image_url') {
+                        $hasImageUrl = true;
+                        break;
+                    }
+                }
+                if (!$hasImageUrl) {
+                    $this->pdo->exec("ALTER TABLE products ADD COLUMN image_url TEXT");
+                }
+            } else {
+                $this->pdo->exec("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT");
+            }
+        } catch (\Throwable $e) {
+            // Ignore if column already exists or table not ready
         }
     }
 
     public function seedDefaults(): void
+    {
+        // On PostgreSQL (Supabase), if tables were created with UUID columns
+        // instead of VARCHAR(64), seed inserts will fail with type mismatch.
+        // Wrap in a transaction so we can roll back cleanly and skip seeding.
+        $driver = $this->getDriver();
+
+        if ($driver === 'pgsql') {
+            try {
+                $this->pdo->beginTransaction();
+                $this->doSeedDefaults();
+                $this->pdo->commit();
+            } catch (\PDOException $e) {
+                if ($this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                // If seeding fails due to type mismatch (22P02) or duplicate key (23505),
+                // the data already exists or the schema has UUID columns — skip silently.
+                if (!in_array($e->getCode(), ['22P02', '23505', '23000'], true)) {
+                    throw $e;
+                }
+            }
+        } else {
+            $this->doSeedDefaults();
+        }
+    }
+
+    private function doSeedDefaults(): void
     {
         $hasher = new PasswordHasher();
         $now = date('Y-m-d H:i:s');
@@ -374,7 +455,76 @@ final class SchemaManager
             }
         }
 
-        // 4. Seed Products and Variants
+        // 4. Seed Promotional Coupons
+        $coupons = [
+            [
+                'id' => 'cpn_haus10',
+                'code' => 'HAUS10',
+                'type' => 'percentage',
+                'value' => 10.00,
+                'min_spend' => 0.00,
+                'max_discount' => null,
+                'usage_limit' => 10000,
+            ],
+            [
+                'id' => 'cpn_welcome10',
+                'code' => 'WELCOME10',
+                'type' => 'percentage',
+                'value' => 10.00,
+                'min_spend' => 500.00,
+                'max_discount' => 200.00,
+                'usage_limit' => 1000,
+            ],
+            [
+                'id' => 'cpn_freeship',
+                'code' => 'FREESHIP',
+                'type' => 'free_shipping',
+                'value' => 50.00,
+                'min_spend' => 800.00,
+                'max_discount' => 50.00,
+                'usage_limit' => 500,
+            ],
+            [
+                'id' => 'cpn_vape100',
+                'code' => 'VAPE100',
+                'type' => 'fixed',
+                'value' => 100.00,
+                'min_spend' => 1200.00,
+                'max_discount' => 100.00,
+                'usage_limit' => 200,
+            ],
+        ];
+
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days'));
+
+        foreach ($coupons as $cpn) {
+            $check = $this->pdo->prepare('SELECT COUNT(*) FROM coupons WHERE code = :code');
+            $check->execute([':code' => $cpn['code']]);
+            if ($check->fetchColumn() == 0) {
+                $ins = $this->pdo->prepare('INSERT INTO coupons (id, code, type, value, min_spend, max_discount, usage_limit, times_used, expires_at, is_active, created_at)
+                    VALUES (:id, :code, :type, :val, :min, :max, :limit, 0, :exp, 1, :created)');
+                $ins->execute([
+                    ':id' => $cpn['id'],
+                    ':code' => $cpn['code'],
+                    ':type' => $cpn['type'],
+                    ':val' => $cpn['value'],
+                    ':min' => $cpn['min_spend'],
+                    ':max' => $cpn['max_discount'],
+                    ':limit' => $cpn['usage_limit'],
+                    ':exp' => $expiresAt,
+                    ':created' => $now,
+                ]);
+            }
+        }
+    } // end doSeedDefaults
+
+    /**
+     * Seeds sample catalog products for automated test suites and isolated fixtures.
+     * Hardcoded products are not seeded by default in production.
+     */
+    public function seedSampleProducts(): void
+    {
+        $now = date('Y-m-d H:i:s');
         $products = [
             [
                 'id' => 'prd_geek_pulse',
@@ -451,68 +601,6 @@ final class SchemaManager
                         ':stock' => $v['stock'],
                     ]);
                 }
-            }
-        }
-
-        // 5. Seed Promotional Coupons
-        $coupons = [
-            [
-                'id' => 'cpn_haus10',
-                'code' => 'HAUS10',
-                'type' => 'percentage',
-                'value' => 10.00,
-                'min_spend' => 0.00,
-                'max_discount' => null,
-                'usage_limit' => 10000,
-            ],
-            [
-                'id' => 'cpn_welcome10',
-                'code' => 'WELCOME10',
-                'type' => 'percentage',
-                'value' => 10.00,
-                'min_spend' => 500.00,
-                'max_discount' => 200.00,
-                'usage_limit' => 1000,
-            ],
-            [
-                'id' => 'cpn_freeship',
-                'code' => 'FREESHIP',
-                'type' => 'free_shipping',
-                'value' => 50.00,
-                'min_spend' => 800.00,
-                'max_discount' => 50.00,
-                'usage_limit' => 500,
-            ],
-            [
-                'id' => 'cpn_vape100',
-                'code' => 'VAPE100',
-                'type' => 'fixed',
-                'value' => 100.00,
-                'min_spend' => 1200.00,
-                'max_discount' => 100.00,
-                'usage_limit' => 200,
-            ],
-        ];
-
-        $expiresAt = date('Y-m-d H:i:s', strtotime('+30 days'));
-
-        foreach ($coupons as $cpn) {
-            $check = $this->pdo->prepare('SELECT COUNT(*) FROM coupons WHERE code = :code');
-            $check->execute([':code' => $cpn['code']]);
-            if ($check->fetchColumn() == 0) {
-                $ins = $this->pdo->prepare('INSERT INTO coupons (id, code, type, value, min_spend, max_discount, usage_limit, times_used, expires_at, is_active, created_at)
-                    VALUES (:id, :code, :type, :val, :min, :max, :limit, 0, :exp, 1, :created)');
-                $ins->execute([
-                    ':id' => $cpn['id'],
-                    ':code' => $cpn['code'],
-                    ':type' => $cpn['type'],
-                    ':val' => $cpn['value'],
-                    ':min' => $cpn['min_spend'],
-                    ':max' => $cpn['max_discount'],
-                    ':limit' => $cpn['usage_limit'],
-                    ':exp' => $expiresAt,
-                    ':created' => $now,
-                ]);
             }
         }
     }

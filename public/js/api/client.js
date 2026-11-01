@@ -451,6 +451,56 @@ class VapehausApiClient {
     });
   }
 
+  async deleteProduct(productId) {
+    return this._request('DELETE', `/admin/products/${productId}`, null, async () => {
+      Store.deleteProduct(productId);
+      return this._wrapSuccess({ id: productId, deleted: true });
+    });
+  }
+
+  async uploadProductImage(fileOrBase64) {
+    let base64Data = fileOrBase64;
+    let filename = 'product.webp';
+    if (fileOrBase64 instanceof Blob || fileOrBase64 instanceof File) {
+      filename = fileOrBase64.name || 'product.webp';
+      base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(fileOrBase64);
+      });
+    }
+
+    return this._request(
+      'POST',
+      '/admin/upload-image',
+      { image_data: base64Data, filename },
+      async () => {
+        return this._wrapSuccess({
+          url: base64Data,
+          filename,
+          size: typeof base64Data === 'string' ? base64Data.length : 0,
+        }, {}, 201);
+      }
+    );
+  }
+
+  async getDatabaseHealth() {
+    return this._request('GET', '/admin/db-health', null, async () => {
+      return this._wrapSuccess({
+        connected: true,
+        driver: 'sqlite',
+        latency_ms: 1.2,
+        counts: {
+          products: Store.getProducts().length,
+          orders: Store.getOrders().length,
+          users: 2,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    });
+  }
+
   async getAdminCoupons() {
     const result = await this._request('GET', '/admin/coupons', null, async () => {
       return this._wrapSuccess(Store.getCoupons());

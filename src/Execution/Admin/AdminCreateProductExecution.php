@@ -76,6 +76,7 @@ final class AdminCreateProductExecution
         }
 
         $productId = 'prd_' . bin2hex(random_bytes(6));
+        $imageUrl = !empty($data['image_url']) ? (string) $data['image_url'] : (!empty($data['imageUrl']) ? (string) $data['imageUrl'] : null);
         $product = new Product(
             $productId,
             $categoryId,
@@ -83,7 +84,10 @@ final class AdminCreateProductExecution
             $slug,
             $data['brand'] ?? '',
             $data['description'] ?? null,
-            (bool) ($data['is_active'] ?? true)
+            (bool) ($data['is_active'] ?? true),
+            null,
+            [],
+            $imageUrl
         );
 
         $this->productRepository->save($product);

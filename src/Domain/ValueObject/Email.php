@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Vapehaus\Domain\ValueObject;
 
-use Vapehaus\Domain\Exception\ValidationException;
+use Vapehaus\Domain\Exception\InvalidEmailException;
 
 final class Email
 {
@@ -14,7 +14,7 @@ final class Email
     {
         $normalized = strtolower(trim($value));
         if (!filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
-            throw new ValidationException("Invalid email address: {$value}");
+            throw new InvalidEmailException($value);
         }
         $this->value = $normalized;
     }

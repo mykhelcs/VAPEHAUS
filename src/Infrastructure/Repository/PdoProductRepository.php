@@ -34,6 +34,7 @@ final class PdoProductRepository implements ProductRepositoryInterface
                 slug = :slug,
                 brand = :brand,
                 description = :desc,
+                image_url = :img,
                 is_active = :active
                 WHERE id = :id');
             $stmt->execute([
@@ -43,11 +44,12 @@ final class PdoProductRepository implements ProductRepositoryInterface
                 ':slug' => $product->getSlug(),
                 ':brand' => $product->getBrand(),
                 ':desc' => $product->getDescription(),
+                ':img' => $product->getImageUrl(),
                 ':active' => $product->isActive() ? 1 : 0,
             ]);
         } else {
-            $stmt = $this->pdo->prepare('INSERT INTO products (id, category_id, name, slug, brand, description, is_active, created_at)
-                VALUES (:id, :cid, :name, :slug, :brand, :desc, :active, :created)');
+            $stmt = $this->pdo->prepare('INSERT INTO products (id, category_id, name, slug, brand, description, image_url, is_active, created_at)
+                VALUES (:id, :cid, :name, :slug, :brand, :desc, :img, :active, :created)');
             $stmt->execute([
                 ':id' => $product->getId(),
                 ':cid' => $product->getCategoryId(),
@@ -55,6 +57,7 @@ final class PdoProductRepository implements ProductRepositoryInterface
                 ':slug' => $product->getSlug(),
                 ':brand' => $product->getBrand(),
                 ':desc' => $product->getDescription(),
+                ':img' => $product->getImageUrl(),
                 ':active' => $product->isActive() ? 1 : 0,
                 ':created' => $product->getCreatedAt(),
             ]);
@@ -298,7 +301,8 @@ final class PdoProductRepository implements ProductRepositoryInterface
             $row['description'] !== null ? (string) $row['description'] : null,
             (bool) $row['is_active'],
             (string) $row['created_at'],
-            $variants
+            $variants,
+            isset($row['image_url']) && $row['image_url'] !== '' ? (string) $row['image_url'] : null
         );
     }
 

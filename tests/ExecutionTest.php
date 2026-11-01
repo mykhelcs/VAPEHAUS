@@ -58,6 +58,7 @@ final class ExecutionTest extends TestCase
         $schema = new SchemaManager($this->pdo);
         $schema->createTables();
         $schema->seedDefaults();
+        $schema->seedSampleProducts();
 
         $this->userRepo = new PdoUserRepository($this->pdo);
         $this->categoryRepo = new PdoCategoryRepository($this->pdo);

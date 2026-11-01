@@ -13,10 +13,7 @@ class VapehausStore {
     return {
       // Current active session user: starts as guest (null)
       currentUser: null,
-      users: [
-        { ...CONFIG.DEFAULT_USER },
-        { ...CONFIG.DEFAULT_ADMIN },
-      ],
+      users: [],
       categories: [],
       products: [],
       cart: {
@@ -450,14 +447,14 @@ class VapehausStore {
       String(checkoutData.paymentMethod || '').toLowerCase()
     );
 
-    const user = this.state.currentUser || CONFIG.DEFAULT_USER;
+    const user = this.state.currentUser;
 
     const newOrder = {
       id: orderId,
       orderNumber,
-      customerName: checkoutData.customerName || `${user.firstName} ${user.lastName}`,
-      customerEmail: checkoutData.customerEmail || user.email,
-      customerPhone: checkoutData.customerPhone || user.phone,
+      customerName: checkoutData.customerName || (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : 'Guest Customer'),
+      customerEmail: checkoutData.customerEmail || user?.email || '',
+      customerPhone: checkoutData.customerPhone || user?.phone || '',
       shippingAddress,
       deliveryNotes: checkoutData.deliveryNotes || '',
       paymentMethod: checkoutData.paymentMethod || 'cod',
@@ -557,6 +554,8 @@ class VapehausStore {
       badge: 'New',
       color1: productData.color1 || '#8b5cf6',
       color2: productData.color2 || '#22d3ee',
+      imageUrl: productData.imageUrl || productData.image_url || null,
+      image_url: productData.imageUrl || productData.image_url || null,
       variants: (productData.variants || []).map((v, idx) => ({
         id: `var_${newId}_${idx + 1}`,
         sku: `${(productData.brand || 'VPH').substring(0, 3).toUpperCase()}-${slug.substring(0, 5).toUpperCase()}-${idx + 1}`,
@@ -583,6 +582,20 @@ class VapehausStore {
     this.state.products.unshift(newProduct);
     this.save();
     return newProduct;
+  }
+
+  deleteProduct(productId) {
+    if (!this.isAdmin()) {
+      throw new Error('Access Denied: Only administrators can delete products from catalog.');
+    }
+    const idx = this.state.products.findIndex((p) => p.id === productId);
+    if (idx !== -1) {
+      const removed = this.state.products.splice(idx, 1)[0];
+      this.state.cart.items = this.state.cart.items.filter((item) => item.productId !== productId);
+      this.save();
+      return removed;
+    }
+    return null;
   }
 
   createCoupon(couponData) {

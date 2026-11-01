@@ -79,12 +79,16 @@ const QuickViewModal = {
 
     const isOutOfStock = v.stock <= 0;
     const isLowStock = v.stock > 0 && v.stock < 10;
+    const imgUrl = p.imageUrl || p.image_url;
+    const mediaHtml = imgUrl
+      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 100%; height: 100%; max-height: 280px; object-fit: contain; border-radius: var(--r-md);">`
+      : `<div class="device-art" style="--c1: ${p.color1 || '#8b5cf6'}; --c2: ${p.color2 || '#22d3ee'}"></div>`;
 
     contentEl.innerHTML = `
       <div class="pdp-grid">
         <div class="pdp-gallery">
           <div class="pdp-main-img">
-            <div class="device-art" style="--c1: ${p.color1 || '#8b5cf6'}; --c2: ${p.color2 || '#22d3ee'}"></div>
+            ${mediaHtml}
           </div>
           <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center;">
             SKU: <b style="color: var(--text);">${v.sku}</b>

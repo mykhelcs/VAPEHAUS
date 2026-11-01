@@ -3,11 +3,72 @@
  * Full ERP fulfillment workflow, inventory stock adjustments, KYC moderation, and metrics
  */
 
+const AdminImageCompressor = {
+  async compress(file, maxWidth = 1000, maxHeight = 1000, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let mime = 'image/webp';
+          let dataUrl = canvas.toDataURL(mime, quality);
+          if (!dataUrl.startsWith('data:image/webp')) {
+            mime = 'image/jpeg';
+            dataUrl = canvas.toDataURL(mime, quality);
+          }
+
+          const head = dataUrl.indexOf(',');
+          const base64Str = dataUrl.substring(head + 1);
+          const compressedSizeBytes = Math.round((base64Str.length * 3) / 4);
+
+          resolve({
+            dataUrl,
+            mime,
+            width,
+            height,
+            originalSize: file.size,
+            compressedSize: compressedSizeBytes,
+            savingsPercent: Math.max(0, Math.round(((file.size - compressedSizeBytes) / file.size) * 100)),
+          });
+        };
+        img.onerror = () => reject(new Error('Failed to load image into canvas.'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file.'));
+      reader.readAsDataURL(file);
+    });
+  },
+};
+window.AdminImageCompressor = AdminImageCompressor;
+
 const AdminApp = {
   currentTab: 'dashboard',
   orderFilterStatus: 'all',
   orderSearchQuery: '',
   selectedOrderId: null,
+  revenueChartInstance: null,
+  categoryChartInstance: null,
 
   async init() {
     this.setupSidebarNav();
@@ -101,6 +162,12 @@ const AdminApp = {
     const res = await Api.getDashboardMetrics();
     const metrics = res.data;
 
+    // Update Average Order Value in trend header
+    const aovBadge = document.getElementById('chart-aov-badge');
+    if (aovBadge && metrics.average_order_value !== undefined) {
+      aovBadge.textContent = 'AOV: ' + Money.format(metrics.average_order_value);
+    }
+
     kpiEl.innerHTML = `
       <div class="kpi-card" style="--kpi-color: var(--accent2);">
         <span class="kpi-label">Gross Revenue</span>
@@ -184,6 +251,180 @@ const AdminApp = {
             </div>
           </div>
         `).join('');
+    }
+
+    // Render interactive charts and top products
+    this.renderDashboardCharts(metrics);
+    this.renderTopProducts(metrics.top_products || []);
+  },
+
+  renderDashboardCharts(metrics) {
+    if (typeof Chart === 'undefined') return;
+
+    // 1. Sales Trend Line Chart
+    const revCanvas = document.getElementById('chart-revenue-trend');
+    if (revCanvas) {
+      if (this.revenueChartInstance) {
+        this.revenueChartInstance.destroy();
+      }
+
+      const timeline = metrics.revenue_by_day || [];
+      const labels = timeline.map((t) => t.label || (t.date ? t.date.substring(5) : ''));
+      const revenues = timeline.map((t) => t.revenue || 0);
+
+      this.revenueChartInstance = new Chart(revCanvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Daily Sales',
+            data: revenues,
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34, 211, 238, 0.12)',
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: '#8b5cf6',
+            pointBorderColor: '#ffffff',
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` Sales: ${Money.format(ctx.raw)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8', font: { size: 11 } },
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: {
+                color: '#94a3b8',
+                font: { size: 11 },
+                callback: (val) => '₱' + Number(val).toLocaleString(),
+              },
+            },
+          },
+        },
+      });
+    }
+
+    // 2. Category Mix Doughnut Chart
+    const catCanvas = document.getElementById('chart-category-distribution');
+    if (catCanvas) {
+      if (this.categoryChartInstance) {
+        this.categoryChartInstance.destroy();
+      }
+
+      const categories = metrics.category_distribution || [];
+      const labels = categories.length > 0 ? categories.map((c) => c.category) : ['Devices', 'Juices', 'Pods'];
+      const counts = categories.length > 0 ? categories.map((c) => c.count) : [1, 1, 1];
+
+      this.categoryChartInstance = new Chart(catCanvas, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data: counts,
+            backgroundColor: [
+              '#8b5cf6',
+              '#22d3ee',
+              '#10b981',
+              '#f59e0b',
+              '#ec4899',
+              '#06b6d4',
+            ],
+            borderColor: '#12121e',
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#e2e8f0', boxWidth: 12, font: { size: 11 } },
+            },
+          },
+          cutout: '68%',
+        },
+      });
+    }
+  },
+
+  renderTopProducts(topProducts) {
+    const tableEl = document.getElementById('dashboard-top-products-table');
+    if (!tableEl) return;
+
+    if (!topProducts || topProducts.length === 0) {
+      tableEl.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">
+            No catalog products recorded yet.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tableEl.innerHTML = topProducts.map((p) => {
+      const imgHtml = p.image_url
+        ? `<img src="${p.image_url}" alt="${p.name}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line);">`
+        : `<div style="width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent2));"></div>`;
+
+      return `
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              ${imgHtml}
+              <b style="font-size: 0.88rem;">${p.name}</b>
+            </div>
+          </td>
+          <td><span style="font-size: 0.82rem; color: var(--text-muted);">${p.brand}</span></td>
+          <td>${p.variant_count} SKUs</td>
+          <td><b>${p.total_stock} units</b></td>
+          <td>
+            <span class="badge ${p.total_stock > 10 ? 'badge-success' : (p.total_stock > 0 ? 'badge-warning' : 'badge-danger')}">
+              ${p.total_stock > 10 ? 'Healthy' : (p.total_stock > 0 ? 'Low Stock' : 'Out of Stock')}
+            </span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  async testDatabaseConnection() {
+    const dot = document.getElementById('db-health-dot');
+    const text = document.getElementById('db-health-text');
+    if (text) text.textContent = 'Pinging...';
+
+    try {
+      const res = await Api.getDatabaseHealth();
+      if (res && res.success && res.data && res.data.connected) {
+        if (dot) dot.style.background = '#22c55e';
+        const driverName = (res.data.driver || 'DB').toUpperCase();
+        if (text) text.textContent = `DB: ${driverName} (${res.data.latency_ms}ms)`;
+        Toast.success(`Database Connected: ${driverName} active, response time ${res.data.latency_ms}ms.`);
+      } else {
+        if (dot) dot.style.background = '#ef4444';
+        if (text) text.textContent = 'DB: Disconnected';
+        Toast.error('Database connection check failed.');
+      }
+    } catch (err) {
+      if (dot) dot.style.background = '#ef4444';
+      if (text) text.textContent = 'DB: Error';
+      Toast.error('Database ping error: ' + err.message);
     }
   },
 
@@ -422,7 +663,7 @@ const AdminApp = {
     if (products.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="3" style="text-align: center; padding: 40px; color: var(--text-muted);">
+          <td colspan="4" style="text-align: center; padding: 40px; color: var(--text-muted);">
             No products found in catalog.
           </td>
         </tr>
@@ -435,12 +676,16 @@ const AdminApp = {
       const c2 = p.color2 || '#22d3ee';
       const variants = p.variants || [];
       const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
+      const imgUrl = p.imageUrl || p.image_url;
+      const imgHtml = imgUrl
+        ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;">`
+        : `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
 
       return `
       <tr>
         <td>
           <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>
+            ${imgHtml}
             <div>
               <div style="font-weight: 700;">${p.name}</div>
               <div style="font-size: 0.76rem; color: var(--text-muted);">${p.brand} · ${p.category || p.category_id || ''}</div>
@@ -467,8 +712,33 @@ const AdminApp = {
             ${totalUnits} Units Total
           </span>
         </td>
+        <td style="text-align: right;">
+          <button class="btn btn-danger btn-sm" onclick="AdminApp.deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Delete Product from Catalog">
+            🗑️ Delete
+          </button>
+        </td>
       </tr>
     `;}).join('');
+  },
+
+  async deleteProduct(productId, productName) {
+    if (!confirm(`Are you sure you want to permanently delete "${productName}" from the catalog?\n\nThis will remove the product and all its variants. This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const res = await Api.deleteProduct(productId);
+      if (res && res.success) {
+        Store.deleteProduct(productId);
+        Toast.success(`Product "${productName}" was deleted.`);
+        this.renderInventory();
+        this.renderDashboard();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to delete product.');
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error occurred while deleting product.');
+    }
   },
 
   async adjustStock(variantId, delta) {

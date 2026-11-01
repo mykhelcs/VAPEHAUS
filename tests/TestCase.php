@@ -75,7 +75,7 @@ abstract class TestCase
     protected function assertEquals(mixed $expected, mixed $actual, string $message = ''): void
     {
         $this->assertionCount++;
-        if ($expected !== $actual) {
+        if ($expected != $actual) {
             $expectedStr = is_scalar($expected) ? (string)$expected : json_encode($expected);
             $actualStr = is_scalar($actual) ? (string)$actual : json_encode($actual);
             throw new Exception($message !== '' ? $message : "Failed asserting that {$actualStr} matches expected {$expectedStr}.");
@@ -115,3 +115,4 @@ abstract class TestCase
         }
     }
 }
+

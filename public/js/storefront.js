@@ -248,12 +248,16 @@ const StorefrontApp = {
       const c2 = p.color2 || '#22d3ee';
       const reviews = p.reviewsCount ?? p.review_count ?? p.reviews ?? 0;
       const rating = p.rating ?? p.average_rating ?? 5.0;
+      const imgUrl = p.imageUrl || p.image_url;
+      const mediaHtml = imgUrl
+        ? `<img src="${imgUrl}" alt="${p.name}" class="product-photo" style="width: 100%; height: 100%; object-fit: contain; padding: 12px;">`
+        : `<div class="device-art" style="--c1: ${c1}; --c2: ${c2}"></div>`;
 
       return `
         <article class="product-card">
           <div class="product-thumb" onclick="QuickViewModal.open('${p.id}')">
             ${p.badge ? `<span class="badge badge-cyan product-badge">${p.badge}</span>` : ''}
-            <div class="device-art" style="--c1: ${c1}; --c2: ${c2}"></div>
+            ${mediaHtml}
             <div class="product-stock-tag ${totalStock < 10 ? 'low' : ''}">
               ${hasStock ? (totalStock < 10 ? `Only ${totalStock} left` : 'In Stock') : 'Out of Stock'}
             </div>
@@ -328,7 +332,21 @@ const StorefrontApp = {
     const content = document.getElementById('account-modal-content');
     if (!content) return;
 
-    const user = Store.getCurrentUser() || CONFIG.DEFAULT_USER;
+    const user = Store.getCurrentUser();
+    if (!user) {
+      content.innerHTML = `
+        <div style="padding: 40px; text-align: center;">
+          <h2 style="font-size: 1.4rem; margin-bottom: 12px;">Sign in to your account</h2>
+          <p style="color: var(--text-muted); margin-bottom: 24px;">Track orders, manage addresses, and complete statutory 18+ age verification.</p>
+          <div style="display: flex; gap: 12px; justify-content: center;">
+            <button class="btn btn-cyan" onclick="AuthModal.open('login')">Sign In</button>
+            <button class="btn btn-secondary" onclick="AuthModal.open('register')">Register Adult Account</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     const orders = Store.getOrders();
     const isAdmin = Store.isAdmin();
 
@@ -382,7 +400,8 @@ const StorefrontApp = {
       const orders = Store.getOrders();
       container.innerHTML = this.renderAccountOrdersHtml(orders);
     } else if (tab === 'kyc') {
-      const user = Store.getCurrentUser() || CONFIG.DEFAULT_USER;
+      const user = Store.getCurrentUser();
+      const isVerified = user ? !!user.isAgeVerified : false;
       container.innerHTML = `
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 24px;">
           <h4 style="margin-bottom: 8px;">Statutory 18+ Government ID Verification</h4>
@@ -393,10 +412,10 @@ const StorefrontApp = {
           <div style="background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--r-md); padding: 24px; text-align: center; margin-bottom: 20px;">
             <div style="font-size: 2.4rem; margin-bottom: 8px;">🪪</div>
             <div style="font-weight: 600; margin-bottom: 4px;">Philippine Passport / Driver's License / UMID</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">Current Status: <b style="color: var(--success);">${user.isAgeVerified ? 'VERIFIED (18+)' : 'PENDING REVIEW'}</b></div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Current Status: <b style="color: var(--success);">${isVerified ? 'VERIFIED (18+)' : 'PENDING REVIEW'}</b></div>
           </div>
 
-          <button class="btn btn-cyan btn-sm" onclick="Toast.success('Government ID is in good standing (18+ Verified).');">
+          <button class="btn btn-cyan btn-sm" onclick="Toast.success('Government ID status: verified.');">
             ✓ Verification Status Confirmed
           </button>
         </div>
@@ -445,21 +464,36 @@ const StorefrontApp = {
     }
 
     const file = fileInput.files[0];
-    const user = Store.getCurrentUser() || CONFIG.DEFAULT_USER;
-    if (btn) { btn.disabled = true; btn.textContent = 'Uploading to Supabase…'; }
+    const user = Store.getCurrentUser();
+    if (!user) {
+      Toast.error('Please sign in first before uploading identification.');
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Uploading ID…'; }
 
     try {
       let fileUrl = '';
       if (typeof window.supabase !== 'undefined' && CONFIG.SUPABASE_URL && !CONFIG.SUPABASE_URL.includes('YOUR-PROJECT-REF')) {
-        const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-        const ext = file.name.split('.').pop();
-        const filePath = `${user.id}/id_${Date.now()}.${ext}`;
-        const { data, error } = await sb.storage.from('kyc-documents').upload(filePath, file, { upsert: true });
-        if (error) throw error;
-        fileUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/kyc-documents/${data.path}`;
-      } else {
-        // Fallback simulated URL for local dev
-        fileUrl = `https://mock-supabase.storage/${user.id}/${file.name}`;
+        try {
+          const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+          const ext = file.name.split('.').pop();
+          const filePath = `${user.id}/id_${Date.now()}.${ext}`;
+          const { data, error } = await sb.storage.from('kyc-documents').upload(filePath, file, { upsert: true });
+          if (!error && data && data.path) {
+            fileUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/kyc-documents/${data.path}`;
+          }
+        } catch (e) {
+          console.warn('Supabase storage direct upload fallback to backend upload', e);
+        }
+      }
+
+      if (!fileUrl) {
+        const uploadRes = await Api.uploadProductImage(file);
+        if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+          fileUrl = uploadRes.data.url;
+        } else {
+          throw new Error(uploadRes?.error?.message || 'Failed to upload document.');
+        }
       }
 
       await Api.submitKyc({
@@ -468,14 +502,14 @@ const StorefrontApp = {
         idNumber: 'D01-99-XXXXXX',
       });
 
-      Toast.success('Government ID submitted to Supabase Storage successfully!');
+      Toast.success('Government ID submitted successfully for review!');
       user.isAgeVerified = true;
       Store.save();
       this.showAccountTab('kyc');
     } catch (err) {
       Toast.error(err.message || 'Failed to upload document.');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '📤 Upload to Supabase Storage'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Upload Identification Document'; }
     }
   },
 
@@ -520,6 +554,52 @@ const AdminActionModals = {
   closeAddProduct() {
     const modal = document.getElementById('admin-add-product-modal');
     if (modal) modal.classList.remove('open');
+    const previewContainer = document.getElementById('admin-image-preview-container');
+    if (previewContainer) previewContainer.style.display = 'none';
+    const hiddenUrlInput = document.getElementById('admin-new-prod-image-url');
+    if (hiddenUrlInput) hiddenUrlInput.value = '';
+    const fileInput = document.getElementById('admin-new-prod-image');
+    if (fileInput) fileInput.value = '';
+  },
+  async handleImageSelect(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    const previewContainer = document.getElementById('admin-image-preview-container');
+    const previewThumb = document.getElementById('admin-image-preview-thumb');
+    const statsEl = document.getElementById('admin-image-stats');
+    const hiddenUrlInput = document.getElementById('admin-new-prod-image-url');
+
+    try {
+      if (statsEl) statsEl.textContent = 'Compressing image...';
+      if (previewContainer) previewContainer.style.display = 'flex';
+
+      const compressor = window.AdminImageCompressor;
+      if (!compressor) {
+        throw new Error('Image compressor is not initialized.');
+      }
+
+      const compressed = await compressor.compress(file);
+      if (previewThumb) previewThumb.src = compressed.dataUrl;
+
+      const origKb = Math.round(compressed.originalSize / 1024);
+      const compKb = Math.round(compressed.compressedSize / 1024);
+      if (statsEl) {
+        statsEl.innerHTML = `Original: <b>${origKb} KB</b> → Compressed: <b>${compKb} KB</b> <span style="color: var(--cyan);">(-${compressed.savingsPercent}%)</span>`;
+      }
+
+      // Upload to backend storage
+      const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
+      if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+        if (hiddenUrlInput) hiddenUrlInput.value = uploadRes.data.url;
+        Toast.success(`Image optimized & uploaded (${compKb} KB).`);
+      } else {
+        if (hiddenUrlInput) hiddenUrlInput.value = compressed.dataUrl;
+      }
+    } catch (err) {
+      console.error('Image compression error:', err);
+      Toast.error('Failed to compress image: ' + err.message);
+    }
   },
   async submitAddProduct(event) {
     if (event) event.preventDefault();
@@ -532,6 +612,7 @@ const AdminActionModals = {
     const flavors = document.getElementById('admin-new-prod-flavors').value.trim().split(',');
     const stock = parseInt(document.getElementById('admin-new-prod-stock').value, 10) || 20;
     const desc = document.getElementById('admin-new-prod-desc').value.trim();
+    const imageUrl = document.getElementById('admin-new-prod-image-url')?.value || null;
 
     if (!name || !brand || isNaN(price)) {
       Toast.error('Please enter product name, brand, and base price.');
@@ -544,6 +625,8 @@ const AdminActionModals = {
         brand,
         category,
         price,
+        image_url: imageUrl,
+        imageUrl: imageUrl,
         description: desc,
         variants: flavors.map((f) => ({
           flavor: f.trim() || 'Standard Edition',
@@ -556,7 +639,7 @@ const AdminActionModals = {
 
       const res = await Api.addProduct(payload);
       if (res && res.success) {
-        Store.addProduct(payload);
+        Store.addProduct({ ...payload, id: res.data.id || undefined });
         Toast.success(`Product "${res.data.name || name}" added to catalog.`);
         this.closeAddProduct();
         document.getElementById('admin-add-product-form').reset();

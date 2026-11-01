@@ -8,10 +8,14 @@ use Vapehaus\Tests\ApiIntegrationTest;
 use Vapehaus\Tests\DomainTest;
 use Vapehaus\Tests\ExecutionTest;
 use Vapehaus\Tests\TestCase;
+use Vapehaus\Tests\Unit\Execution\AdminDeleteProductExecutionTest;
+use Vapehaus\Tests\Unit\Execution\DatabaseHealthExecutionTest;
 
 $testClasses = [
     DomainTest::class,
     ExecutionTest::class,
+    AdminDeleteProductExecutionTest::class,
+    DatabaseHealthExecutionTest::class,
     ApiIntegrationTest::class,
 ];
 

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/storefront.css">
   <link rel="stylesheet" href="css/admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -84,6 +85,13 @@
         </div>
 
         <div class="topbar-right" style="display: flex; align-items: center; gap: 12px;">
+          <!-- Database Health Status & Ping Tool -->
+          <div id="admin-db-status" style="display: flex; align-items: center; gap: 8px; background: var(--surface2); padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line); font-size: 0.8rem; cursor: pointer;" onclick="AdminApp.testDatabaseConnection()" title="Test Live Database Health">
+            <span id="db-health-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></span>
+            <span id="db-health-text" style="font-weight: 600;">DB: Ready</span>
+            <span style="font-size: 0.72rem; color: var(--accent2); margin-left: 2px;">⚡ Ping</span>
+          </div>
+
           <!-- Prominent Top Admin Actions -->
           <button class="btn btn-sm btn-cyan" onclick="AdminActionModals.openAddProduct()">
             + Add Catalog Product
@@ -110,7 +118,35 @@
           <!-- 5 KPI Metric Cards -->
           <div class="kpi-grid" id="dashboard-kpis-container"></div>
 
-          <div style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 24px;">
+          <!-- Visual Analytics Charts Row -->
+          <div style="display: grid; grid-template-columns: 1.7fr 1.1fr; gap: 24px; margin-bottom: 24px;">
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <div>
+                  <div class="admin-card-title">14-Day Sales & Revenue Trend</div>
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">Daily sales volume & orders</div>
+                </div>
+                <div id="chart-aov-badge" style="font-size: 0.8rem; font-weight: 700; color: var(--accent2); background: var(--surface2); padding: 4px 10px; border-radius: var(--r-full); border: 1px solid var(--line);">AOV: ₱0.00</div>
+              </div>
+              <div style="padding: 16px; height: 260px; position: relative;">
+                <canvas id="chart-revenue-trend"></canvas>
+              </div>
+            </div>
+
+            <div class="admin-card">
+              <div class="admin-card-header">
+                <div>
+                  <div class="admin-card-title">Catalog Category Mix</div>
+                  <div style="font-size: 0.76rem; color: var(--text-muted);">Distribution across active categories</div>
+                </div>
+              </div>
+              <div style="padding: 16px; height: 260px; position: relative;">
+                <canvas id="chart-category-distribution"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1.6fr 1.1fr; gap: 24px; margin-bottom: 24px;">
             <!-- Recent Orders -->
             <div class="admin-card">
               <div class="admin-card-header">
@@ -143,6 +179,28 @@
               <div style="padding: 16px;" id="dashboard-low-stock-list"></div>
             </div>
           </div>
+
+          <!-- Top Performing Products Widget -->
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <div class="admin-card-title">Top Active Catalog Hardware & Juices</div>
+              <button class="btn btn-secondary btn-sm" onclick="AdminApp.showTab('inventory')">Product Catalog →</button>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    <th>Variants</th>
+                    <th>Total Inventory</th>
+                    <th>Stock Health</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboard-top-products-table"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- TAB 2: PRODUCTS & INVENTORY -->
@@ -159,6 +217,7 @@
                     <th>Product</th>
                     <th>Variant Matrix (Flavor, Nicotine, Price & In-line Stock Adjuster)</th>
                     <th>Total Stock</th>
+                    <th style="text-align: right;">Action</th>
                   </tr>
                 </thead>
                 <tbody id="inventory-table-tbody"></tbody>
@@ -290,6 +349,18 @@
           <div class="input-group">
             <label class="input-label">Product Name <span class="required">*</span></label>
             <input type="text" id="admin-new-prod-name" class="input-control" placeholder="e.g. Geekvape Aegis Legend 3" required>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Product Photo <span style="font-size: 0.75rem; color: var(--cyan); font-weight: normal;">(Auto-compressed &lt; 120KB)</span></label>
+            <input type="file" id="admin-new-prod-image" class="input-control" accept="image/*" onchange="AdminActionModals.handleImageSelect(event)">
+            <div id="admin-image-preview-container" style="display: none; margin-top: 10px; align-items: center; gap: 14px; background: var(--surface2); padding: 10px; border-radius: var(--r-md); border: 1px solid var(--line);">
+              <img id="admin-image-preview-thumb" src="" alt="Product Preview" style="width: 54px; height: 54px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line);">
+              <div style="font-size: 0.8rem;">
+                <div id="admin-image-stats" style="color: var(--text-muted);">Compressing...</div>
+                <div style="color: var(--success); font-weight: 600;">✓ Optimized WebP/JPEG ready for upload</div>
+              </div>
+            </div>
+            <input type="hidden" id="admin-new-prod-image-url">
           </div>
           <div class="form-grid-2">
             <div class="input-group">

@@ -4,7 +4,34 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/bootstrap.php';
 
+// ── Global JSON error handler ──────────────────────────────────────────────
+// Ensures ALL unhandled exceptions and fatal errors return a JSON envelope
+// instead of an HTML error page (which causes "non-JSON response" in the client).
+set_exception_handler(function (Throwable $e): void {
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=UTF-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'success' => false,
+        'error'   => [
+            'code'    => 'SERVER_ERROR',
+            'message' => $e->getMessage(),
+            'details' => [],
+        ],
+    ]);
+    exit;
+});
+
+set_error_handler(function (int $errno, string $errstr, string $errfile, int $errline): bool {
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+    throw new \ErrorException($errstr, 0, $errno, $errfile, $errline);
+});
+
 // Security Headers (Audit Spec & Production Hardening)
+header('Content-Type: application/json; charset=UTF-8');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: strict-origin-when-cross-origin');

@@ -1,14 +1,35 @@
 -- ============================================================
--- VAPEHAUS — Supabase PostgreSQL Schema + Row Level Security (RLS)
--- Paste this entire script into:
--- Supabase Dashboard -> SQL Editor -> New query -> Run
+-- VAPEHAUS — Supabase Schema RESET
+-- Run this in: Supabase Dashboard → SQL Editor → New Query → Run
+--
+-- This drops all existing tables and recreates them with
+-- VARCHAR(64) primary keys to match the PHP backend's ID format.
 -- ============================================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Drop all tables in reverse dependency order
+DROP TABLE IF EXISTS sessions              CASCADE;
+DROP TABLE IF EXISTS notifications_log     CASCADE;
+DROP TABLE IF EXISTS inventory_audit_logs  CASCADE;
+DROP TABLE IF EXISTS payment_transactions  CASCADE;
+DROP TABLE IF EXISTS restock_subscriptions CASCADE;
+DROP TABLE IF EXISTS wishlists             CASCADE;
+DROP TABLE IF EXISTS return_requests       CASCADE;
+DROP TABLE IF EXISTS kyc_verifications     CASCADE;
+DROP TABLE IF EXISTS product_reviews       CASCADE;
+DROP TABLE IF EXISTS coupon_redemptions    CASCADE;
+DROP TABLE IF EXISTS coupons               CASCADE;
+DROP TABLE IF EXISTS user_addresses        CASCADE;
+DROP TABLE IF EXISTS order_items           CASCADE;
+DROP TABLE IF EXISTS orders                CASCADE;
+DROP TABLE IF EXISTS cart_items            CASCADE;
+DROP TABLE IF EXISTS carts                 CASCADE;
+DROP TABLE IF EXISTS product_variants      CASCADE;
+DROP TABLE IF EXISTS products              CASCADE;
+DROP TABLE IF EXISTS categories            CASCADE;
+DROP TABLE IF EXISTS users                 CASCADE;
 
 -- ── 1. USERS ──────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id              VARCHAR(64)  PRIMARY KEY,
     email           VARCHAR(191) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
@@ -21,29 +42,30 @@ CREATE TABLE IF NOT EXISTS users (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
--- Direct anon/authenticated client API access denied. The PHP backend connects via DATABASE_URL (postgres user), which bypasses RLS.
 CREATE POLICY "deny_anon_users" ON users FOR ALL TO anon, authenticated USING (false);
 
 -- ── 2. CATEGORIES ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE categories (
     id          VARCHAR(64)  PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
     slug        VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
+    image_url   TEXT,
     is_active   INTEGER      NOT NULL DEFAULT 1
 );
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read_categories" ON categories FOR SELECT TO anon, authenticated USING (is_active = 1);
-CREATE POLICY "deny_write_categories" ON categories FOR INSERT TO anon, authenticated WITH CHECK (false);
+CREATE POLICY "deny_write_categories"  ON categories FOR INSERT TO anon, authenticated WITH CHECK (false);
 
 -- ── 3. PRODUCTS ───────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE products (
     id             VARCHAR(64)   PRIMARY KEY,
     category_id    VARCHAR(64)   NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     name           VARCHAR(200)  NOT NULL,
     slug           VARCHAR(200)  NOT NULL UNIQUE,
     brand          VARCHAR(100)  NOT NULL,
     description    TEXT,
+    image_url      TEXT,
     average_rating DECIMAL(3,2)  NOT NULL DEFAULT 0.00,
     review_count   INTEGER       NOT NULL DEFAULT 0,
     is_active      INTEGER       NOT NULL DEFAULT 1,
@@ -51,10 +73,10 @@ CREATE TABLE IF NOT EXISTS products (
 );
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read_products" ON products FOR SELECT TO anon, authenticated USING (is_active = 1);
-CREATE POLICY "deny_write_products" ON products FOR INSERT TO anon, authenticated WITH CHECK (false);
+CREATE POLICY "deny_write_products"  ON products FOR INSERT TO anon, authenticated WITH CHECK (false);
 
 -- ── 4. PRODUCT VARIANTS ───────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS product_variants (
+CREATE TABLE product_variants (
     id                VARCHAR(64)   PRIMARY KEY,
     product_id        VARCHAR(64)   NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     sku               VARCHAR(100)  NOT NULL UNIQUE,
@@ -66,10 +88,10 @@ CREATE TABLE IF NOT EXISTS product_variants (
 );
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read_variants" ON product_variants FOR SELECT TO anon, authenticated USING (is_active = 1);
-CREATE POLICY "deny_write_variants" ON product_variants FOR INSERT TO anon, authenticated WITH CHECK (false);
+CREATE POLICY "deny_write_variants"  ON product_variants FOR INSERT TO anon, authenticated WITH CHECK (false);
 
 -- ── 5. CARTS ──────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS carts (
+CREATE TABLE carts (
     id                  VARCHAR(64)  PRIMARY KEY,
     user_id             VARCHAR(64),
     session_token       VARCHAR(128),
@@ -80,7 +102,7 @@ ALTER TABLE carts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_carts" ON carts FOR ALL TO anon, authenticated USING (false);
 
 -- ── 6. CART ITEMS ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS cart_items (
+CREATE TABLE cart_items (
     id         VARCHAR(64) PRIMARY KEY,
     cart_id    VARCHAR(64) NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
     variant_id VARCHAR(64) NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
@@ -90,7 +112,7 @@ ALTER TABLE cart_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_cart_items" ON cart_items FOR ALL TO anon, authenticated USING (false);
 
 -- ── 7. ORDERS ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE orders (
     id               VARCHAR(64)   PRIMARY KEY,
     order_number     VARCHAR(64)   NOT NULL UNIQUE,
     user_id          VARCHAR(64)   NOT NULL REFERENCES users(id),
@@ -114,7 +136,7 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_orders" ON orders FOR ALL TO anon, authenticated USING (false);
 
 -- ── 8. ORDER ITEMS ────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS order_items (
+CREATE TABLE order_items (
     id                   VARCHAR(64)   PRIMARY KEY,
     order_id             VARCHAR(64)   NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     variant_id           VARCHAR(64)   NOT NULL,
@@ -130,7 +152,7 @@ ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_order_items" ON order_items FOR ALL TO anon, authenticated USING (false);
 
 -- ── 9. USER ADDRESSES ─────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS user_addresses (
+CREATE TABLE user_addresses (
     id             VARCHAR(64)  PRIMARY KEY,
     user_id        VARCHAR(64)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     label          VARCHAR(50)  NOT NULL DEFAULT 'Home',
@@ -148,7 +170,7 @@ ALTER TABLE user_addresses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_addresses" ON user_addresses FOR ALL TO anon, authenticated USING (false);
 
 -- ── 10. COUPONS ───────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS coupons (
+CREATE TABLE coupons (
     id           VARCHAR(64)   PRIMARY KEY,
     code         VARCHAR(64)   NOT NULL UNIQUE,
     type         VARCHAR(30)   NOT NULL,
@@ -163,9 +185,9 @@ CREATE TABLE IF NOT EXISTS coupons (
 );
 ALTER TABLE coupons ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read_active_coupons" ON coupons FOR SELECT TO anon, authenticated USING (is_active = 1);
-CREATE POLICY "deny_write_coupons" ON coupons FOR INSERT TO anon, authenticated WITH CHECK (false);
+CREATE POLICY "deny_write_coupons"         ON coupons FOR INSERT TO anon, authenticated WITH CHECK (false);
 
-CREATE TABLE IF NOT EXISTS coupon_redemptions (
+CREATE TABLE coupon_redemptions (
     id              VARCHAR(64)   PRIMARY KEY,
     coupon_id       VARCHAR(64)   NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
     user_id         VARCHAR(64)   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -177,7 +199,7 @@ ALTER TABLE coupon_redemptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_redemptions" ON coupon_redemptions FOR ALL TO anon, authenticated USING (false);
 
 -- ── 11. PRODUCT REVIEWS ───────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS product_reviews (
+CREATE TABLE product_reviews (
     id                VARCHAR(64)  PRIMARY KEY,
     product_id        VARCHAR(64)  NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     user_id           VARCHAR(64)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -190,10 +212,10 @@ CREATE TABLE IF NOT EXISTS product_reviews (
 );
 ALTER TABLE product_reviews ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_read_reviews" ON product_reviews FOR SELECT TO anon, authenticated USING (status = 'approved');
-CREATE POLICY "deny_write_reviews" ON product_reviews FOR INSERT TO anon, authenticated WITH CHECK (false);
+CREATE POLICY "deny_write_reviews"  ON product_reviews FOR INSERT TO anon, authenticated WITH CHECK (false);
 
 -- ── 12. KYC VERIFICATIONS ─────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS kyc_verifications (
+CREATE TABLE kyc_verifications (
     id               VARCHAR(64)  PRIMARY KEY,
     user_id          VARCHAR(64)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     id_type          VARCHAR(50)  NOT NULL,
@@ -209,7 +231,7 @@ ALTER TABLE kyc_verifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_kyc" ON kyc_verifications FOR ALL TO anon, authenticated USING (false);
 
 -- ── 13. RETURN REQUESTS (RMA) ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS return_requests (
+CREATE TABLE return_requests (
     id          VARCHAR(64) PRIMARY KEY,
     order_id    VARCHAR(64) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     user_id     VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -225,7 +247,7 @@ ALTER TABLE return_requests ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_rma" ON return_requests FOR ALL TO anon, authenticated USING (false);
 
 -- ── 14. WISHLISTS ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS wishlists (
+CREATE TABLE wishlists (
     id         VARCHAR(64) PRIMARY KEY,
     user_id    VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     product_id VARCHAR(64) NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -235,7 +257,7 @@ CREATE TABLE IF NOT EXISTS wishlists (
 ALTER TABLE wishlists ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_wishlists" ON wishlists FOR ALL TO anon, authenticated USING (false);
 
-CREATE TABLE IF NOT EXISTS restock_subscriptions (
+CREATE TABLE restock_subscriptions (
     id          VARCHAR(64) PRIMARY KEY,
     user_id     VARCHAR(64) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     variant_id  VARCHAR(64) NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
@@ -246,7 +268,7 @@ ALTER TABLE restock_subscriptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_restock" ON restock_subscriptions FOR ALL TO anon, authenticated USING (false);
 
 -- ── 15. PAYMENT TRANSACTIONS ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS payment_transactions (
+CREATE TABLE payment_transactions (
     id                    VARCHAR(64)   PRIMARY KEY,
     order_id              VARCHAR(64)   NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     gateway               VARCHAR(50)   NOT NULL,
@@ -260,7 +282,7 @@ ALTER TABLE payment_transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_payment_tx" ON payment_transactions FOR ALL TO anon, authenticated USING (false);
 
 -- ── 16. INVENTORY AUDIT LOGS ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS inventory_audit_logs (
+CREATE TABLE inventory_audit_logs (
     id             VARCHAR(64) PRIMARY KEY,
     variant_id     VARCHAR(64) NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
     previous_stock INTEGER     NOT NULL,
@@ -274,7 +296,7 @@ ALTER TABLE inventory_audit_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_audit" ON inventory_audit_logs FOR ALL TO anon, authenticated USING (false);
 
 -- ── 17. NOTIFICATIONS LOG ─────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS notifications_log (
+CREATE TABLE notifications_log (
     id        VARCHAR(64)  PRIMARY KEY,
     recipient VARCHAR(150) NOT NULL,
     channel   VARCHAR(30)  NOT NULL,
@@ -286,7 +308,7 @@ ALTER TABLE notifications_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_notif" ON notifications_log FOR ALL TO anon, authenticated USING (false);
 
 -- ── 18. SESSIONS (Bearer tokens) ─────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE sessions (
     token      VARCHAR(128) PRIMARY KEY,
     user_id    VARCHAR(64)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     ip_address VARCHAR(45),
@@ -308,17 +330,14 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires   ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_reviews_product    ON product_reviews(product_id, status);
 
 -- ── SUPABASE STORAGE (KYC ID Images) ─────────────────────────────────────
--- Create bucket for regulatory government ID uploads
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('kyc-documents', 'kyc-documents', false)
 ON CONFLICT (id) DO NOTHING;
 
--- Allow authenticated and guest checkout users to upload to kyc-documents bucket
 CREATE POLICY "allow_kyc_upload" ON storage.objects
     FOR INSERT TO anon, authenticated
     WITH CHECK (bucket_id = 'kyc-documents');
 
--- Prevent public downloads of private government IDs
 CREATE POLICY "deny_public_kyc_download" ON storage.objects
     FOR SELECT TO anon, authenticated
     USING (false);

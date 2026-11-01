@@ -88,7 +88,7 @@ final class DomainTest extends TestCase
     public function testUserUnderageAssertion(): void
     {
         // 25 years old adult
-        $adultDob = (new DateTimeImmutable('-25 years'))->format('Y-m-d');
+        $adultDob = (new DateTimeImmutable('today -25 years'))->format('Y-m-d');
         $user = new User(
             'usr_adult',
             new Email('adult@test.ph'),
@@ -106,7 +106,7 @@ final class DomainTest extends TestCase
         $user->assertCanPurchaseVape(18);
 
         // 16 years old minor
-        $minorDob = (new DateTimeImmutable('-16 years'))->format('Y-m-d');
+        $minorDob = (new DateTimeImmutable('today -16 years'))->format('Y-m-d');
         $minor = new User(
             'usr_minor',
             new Email('minor@test.ph'),
@@ -207,3 +207,4 @@ final class DomainTest extends TestCase
         $order->transitionTo('pending');
     }
 }
+

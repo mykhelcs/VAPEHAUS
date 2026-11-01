@@ -8,13 +8,16 @@ use Vapehaus\Domain\Repository\InventoryAuditRepositoryInterface;
 use Vapehaus\Execution\Admin\AdminCreateCategoryExecution;
 use Vapehaus\Execution\Admin\AdminCreateProductExecution;
 use Vapehaus\Execution\Admin\AdminCreateVariantExecution;
+use Vapehaus\Execution\Admin\AdminDeleteProductExecution;
 use Vapehaus\Execution\Admin\AdminGetDashboardExecution;
 use Vapehaus\Execution\Admin\AdminListCustomersExecution;
 use Vapehaus\Execution\Admin\AdminListOrdersExecution;
 use Vapehaus\Execution\Admin\AdminUpdateOrderStatusExecution;
 use Vapehaus\Execution\Admin\AdminUpdateStockExecution;
+use Vapehaus\Execution\Admin\UploadProductImageExecution;
 use Vapehaus\Execution\Order\AdminShipOrderExecution;
 use Vapehaus\Execution\Order\GetOrderDetailExecution;
+use Vapehaus\Execution\System\CheckDatabaseHealthExecution;
 use Vapehaus\Presentation\Http\Request;
 use Vapehaus\Presentation\Http\Response;
 use Vapehaus\Presentation\Response\ApiResponse;
@@ -32,6 +35,9 @@ final class AdminController
     private AdminListCustomersExecution $listCustomersExecution;
     private ?AdminShipOrderExecution $shipOrderExecution;
     private ?InventoryAuditRepositoryInterface $auditRepo;
+    private ?AdminDeleteProductExecution $deleteProductExecution;
+    private ?UploadProductImageExecution $uploadImageExecution;
+    private ?CheckDatabaseHealthExecution $checkDbHealthExecution;
 
     public function __construct(
         AdminGetDashboardExecution $dashboardExecution,
@@ -44,7 +50,10 @@ final class AdminController
         AdminUpdateOrderStatusExecution $updateOrderStatusExecution,
         AdminListCustomersExecution $listCustomersExecution,
         ?AdminShipOrderExecution $shipOrderExecution = null,
-        ?InventoryAuditRepositoryInterface $auditRepo = null
+        ?InventoryAuditRepositoryInterface $auditRepo = null,
+        ?AdminDeleteProductExecution $deleteProductExecution = null,
+        ?UploadProductImageExecution $uploadImageExecution = null,
+        ?CheckDatabaseHealthExecution $checkDbHealthExecution = null
     ) {
         $this->dashboardExecution = $dashboardExecution;
         $this->createCategoryExecution = $createCategoryExecution;
@@ -57,6 +66,9 @@ final class AdminController
         $this->listCustomersExecution = $listCustomersExecution;
         $this->shipOrderExecution = $shipOrderExecution;
         $this->auditRepo = $auditRepo;
+        $this->deleteProductExecution = $deleteProductExecution;
+        $this->uploadImageExecution = $uploadImageExecution;
+        $this->checkDbHealthExecution = $checkDbHealthExecution;
     }
 
     public function getDashboard(Request $request): Response
@@ -75,6 +87,36 @@ final class AdminController
     {
         $product = $this->createProductExecution->execute($request->getBody());
         return ApiResponse::success($product, [], 201);
+    }
+
+    /**
+     * @param array{id: string} $params
+     */
+    public function deleteProduct(Request $request, array $params): Response
+    {
+        if ($this->deleteProductExecution === null) {
+            return ApiResponse::error('NOT_IMPLEMENTED', 'Delete product execution is not configured.');
+        }
+        $result = $this->deleteProductExecution->execute($params['id']);
+        return ApiResponse::success($result);
+    }
+
+    public function uploadImage(Request $request): Response
+    {
+        if ($this->uploadImageExecution === null) {
+            return ApiResponse::error('NOT_IMPLEMENTED', 'Upload image execution is not configured.');
+        }
+        $result = $this->uploadImageExecution->execute($request->getBody());
+        return ApiResponse::success($result, [], 201);
+    }
+
+    public function getDatabaseHealth(Request $request): Response
+    {
+        if ($this->checkDbHealthExecution === null) {
+            return ApiResponse::error('NOT_IMPLEMENTED', 'Database health check execution is not configured.');
+        }
+        $result = $this->checkDbHealthExecution->execute();
+        return ApiResponse::success($result);
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vapehaus\Infrastructure\Database;
 
 use PDO;
+use Throwable;
 use Vapehaus\Infrastructure\Environment\Env;
 
 final class DatabaseConnection
@@ -27,65 +28,99 @@ final class DatabaseConnection
             return $pdo;
         }
 
-        // Check DATABASE_URL first (Render / Supabase PostgreSQL)
+        // 1. Check DATABASE_URL first (Render / Supabase URL format)
         $databaseUrl = Env::get('DATABASE_URL');
         if (!empty($databaseUrl) && is_string($databaseUrl)) {
             $parsed = parse_url($databaseUrl);
             if ($parsed !== false && isset($parsed['scheme'])) {
                 $driver = $parsed['scheme'] === 'postgres' || $parsed['scheme'] === 'postgresql' ? 'pgsql' : $parsed['scheme'];
-                $host = $parsed['host'] ?? '127.0.0.1';
+                $host = $parsed['host'] ?? '';
                 $port = $parsed['port'] ?? ($driver === 'pgsql' ? 5432 : 3306);
                 $db = ltrim($parsed['path'] ?? 'vapehaus_db', '/');
                 $user = $parsed['user'] ?? 'postgres';
                 $pass = $parsed['pass'] ?? '';
 
-                $dsn = "{$driver}:host={$host};port={$port};dbname={$db}";
-                if ($driver === 'pgsql') {
-                    $dsn .= ";sslmode=require";
-                }
+                if (!empty($host)) {
+                    $dsn = "{$driver}:host={$host};port={$port};dbname={$db}";
+                    if ($driver === 'pgsql') {
+                        $dsn .= ";sslmode=require";
+                    }
 
-                $pdo = new PDO($dsn, $user, $pass);
+                    try {
+                        $pdo = new PDO($dsn, $user, $pass);
+                        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+                        self::$instance = $pdo;
+                        return $pdo;
+                    } catch (Throwable $e) {
+                        if (Env::get('APP_ENV') !== 'production') {
+                            error_log("DatabaseConnection: Remote DB via DATABASE_URL failed (" . $e->getMessage() . "), falling back.");
+                        } else {
+                            throw $e;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check DB_DRIVER or infer driver from DB_HOST / parameters
+        $rawDriver = Env::get('DB_DRIVER');
+        $host = (string) (Env::get('DB_HOST') ?? '');
+
+        if (!empty($rawDriver)) {
+            $driver = strtolower((string) $rawDriver);
+        } elseif (!empty($host)) {
+            // If DB_HOST is set without DB_DRIVER, detect based on host or default to pgsql
+            $driver = str_contains($host, 'supabase') || str_contains($host, 'postgres') ? 'pgsql' : 'mysql';
+        } else {
+            $driver = 'sqlite';
+        }
+
+        if ($driver === 'mysql') {
+            $port = (string) Env::get('DB_PORT', '3306');
+            $database = (string) (Env::get('DB_DATABASE') ?? Env::get('DB_NAME') ?? 'vapehaus_db');
+            $username = (string) (Env::get('DB_USERNAME') ?? Env::get('DB_USER') ?? 'root');
+            $password = (string) Env::get('DB_PASSWORD', '');
+
+            $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
+            try {
+                $pdo = new PDO($dsn, $username, $password);
                 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
                 self::$instance = $pdo;
                 return $pdo;
+            } catch (Throwable $e) {
+                if (Env::get('APP_ENV') !== 'production') {
+                    error_log("DatabaseConnection: MySQL failed (" . $e->getMessage() . "), falling back to local SQLite.");
+                } else {
+                    throw $e;
+                }
             }
         }
 
-        // Check DB_DRIVER
-        $driver = strtolower((string) Env::get('DB_DRIVER', 'sqlite'));
-
-        if ($driver === 'mysql') {
-            $host = (string) Env::get('DB_HOST', '127.0.0.1');
-            $port = (string) Env::get('DB_PORT', '3306');
-            $database = (string) Env::get('DB_DATABASE', 'vapehaus_db');
-            $username = (string) Env::get('DB_USERNAME', 'root');
-            $password = (string) Env::get('DB_PASSWORD', '');
-
-            $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
-            $pdo = new PDO($dsn, $username, $password);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-            self::$instance = $pdo;
-            return $pdo;
-        }
-
         if ($driver === 'pgsql') {
-            $host = (string) Env::get('DB_HOST', '127.0.0.1');
             $port = (string) Env::get('DB_PORT', '5432');
-            $database = (string) Env::get('DB_DATABASE', 'postgres');
-            $username = (string) Env::get('DB_USERNAME', 'postgres');
+            $database = (string) (Env::get('DB_DATABASE') ?? Env::get('DB_NAME') ?? 'postgres');
+            $username = (string) (Env::get('DB_USERNAME') ?? Env::get('DB_USER') ?? 'postgres');
             $password = (string) Env::get('DB_PASSWORD', '');
 
-            $dsn = "pgsql:host={$host};port={$port};dbname={$database}";
-            $pdo = new PDO($dsn, $username, $password);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            $dsn = "pgsql:host={$host};port={$port};dbname={$database};sslmode=require";
+            try {
+                $pdo = new PDO($dsn, $username, $password);
+                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
-            self::$instance = $pdo;
-            return $pdo;
+                self::$instance = $pdo;
+                return $pdo;
+            } catch (Throwable $e) {
+                if (Env::get('APP_ENV') !== 'production') {
+                    error_log("DatabaseConnection: pgsql failed (" . $e->getMessage() . "), falling back to local SQLite.");
+                } else {
+                    throw $e;
+                }
+            }
         }
 
         // Default: SQLite (zero-config, high determinism)

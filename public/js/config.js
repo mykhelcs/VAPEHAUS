@@ -1,18 +1,16 @@
 /**
  * VAPEHAUS APPLICATION CONFIGURATION
- * Constants, API routes, currency formatting, and default configurations
+ * Production configuration with real API endpoints and Supabase / PayMongo credentials
  */
 
 const CONFIG = {
   APP_NAME: 'VAPEHAUS',
   APP_VERSION: '2.0.0-PROD',
   /**
-   * Set to true during local development (no PHP backend running).
-   * The ApiClient will fall back to the in-memory Store adapter.
-   * MUST be false in production — set via server-rendered meta tag or
-   * swap this file for a production build with the flag off.
+   * Production Mode: ENABLE_LOCAL_FALLBACK is FALSE.
+   * All API calls interact with the live PHP backend and database.
    */
-  ENABLE_LOCAL_FALLBACK: true,
+  ENABLE_LOCAL_FALLBACK: false,
   CURRENCY: {
     CODE: 'PHP',
     SYMBOL: '₱',
@@ -28,30 +26,27 @@ const CONFIG = {
     FREE_SHIPPING_THRESHOLD: 1500.0, // Free shipping if subtotal >= 1500 PHP
   },
   STORAGE_KEYS: {
-    STATE: 'VAPEHAUS_STORE_STATE_V3',
+    STATE: 'VAPEHAUS_STORE_STATE_PROD_V1',
     AGE_VERIFIED: 'VAPEHAUS_AGE_VERIFIED_V1',
     SESSION_TOKEN: 'VAPEHAUS_SESSION_TOKEN',
   },
-  API_BASE_URL: '/api/v1',
-  PAYMONGO_PUBLIC_KEY: 'pk_test_YOUR_PAYMONGO_PUBLIC_KEY',
-  SUPABASE_URL: 'https://YOUR-PROJECT-REF.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-  DEFAULT_USER: {
-    id: 'usr_customer_default',
-    email: 'customer@vapehaus.ph',
-    firstName: 'Juan',
-    lastName: 'Dela Cruz',
-    phone: '+63 917 888 9999',
-    role: 'customer',
-    isAgeVerified: true,
-  },
-  DEFAULT_ADMIN: {
-    id: 'usr_admin_default',
-    email: 'admin@vapehaus.ph',
-    firstName: 'Vapehaus',
-    lastName: 'Administrator',
-    role: 'admin',
-  },
+  /**
+   * API base URL — auto-detected from the current page's origin + path prefix.
+   * Works whether served by Apache (/vapehaus/public/), PHP dev server (/), or Render.
+   * Strip everything from /api/ onwards so we always resolve relative to the doc root.
+   */
+  API_BASE_URL: (function () {
+    const pathname = window.location.pathname;
+    // Find the deepest path component that is NOT a file or known route segment.
+    // We walk back from the current path to find the public root by removing
+    // known non-root segments like 'admin.html', 'index.html', etc.
+    const cleaned = pathname.replace(/\/(index\.html|admin\.html|admin\/?)?$/, '/');
+    const base = cleaned.replace(/\/$/, ''); // trim trailing slash
+    return base + '/api/v1';
+  })(),
+  PAYMONGO_PUBLIC_KEY: 'pk_test_Y8qhFjBW4NWiu8A36T74Mix2',
+  SUPABASE_URL: 'https://xpegspccnihndttvhfna.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZWdzcGNjbmlobmR0dHZoZm5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMzg3OTQsImV4cCI6MjEwODkxNDc5NH0.cfGRSxiLKArKi2NSMFIuD41-rjK6NArlF7BWRRcbdxo',
 };
 
 // Freeze configuration to guarantee determinism
@@ -60,8 +55,6 @@ Object.freeze(CONFIG.CURRENCY);
 Object.freeze(CONFIG.LEGAL);
 Object.freeze(CONFIG.SHIPPING);
 Object.freeze(CONFIG.STORAGE_KEYS);
-// Note: DEFAULT_USER / DEFAULT_ADMIN intentionally NOT deep-frozen so
-// setSessionFromApi can extend them safely via spread.
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = CONFIG;

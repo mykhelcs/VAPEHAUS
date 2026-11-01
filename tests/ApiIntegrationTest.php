@@ -16,12 +16,15 @@ final class ApiIntegrationTest extends TestCase
 
     protected function setUp(): void
     {
+        parent::setUp();
+        \Vapehaus\Presentation\Middleware\RateLimiterMiddleware::reset();
         // Deterministic in-memory database
         $this->pdo = new PDO('sqlite::memory:');
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
         $this->app = new App($this->pdo);
+        (new SchemaManager($this->pdo))->seedSampleProducts();
     }
 
     private function request(string $method, string $path, array $body = [], array $headers = []): array
@@ -31,7 +34,12 @@ final class ApiIntegrationTest extends TestCase
             $normalizedHeaders[strtolower($k)] = $v;
         }
 
-        $req = new Request($method, $path, $normalizedHeaders, [], $body);
+        $queryParams = [];
+        $queryStr = parse_url($path, PHP_URL_QUERY);
+        if ($queryStr) {
+            parse_str($queryStr, $queryParams);
+        }
+        $req = new Request($method, $path, $queryParams, $body, $normalizedHeaders);
         $response = $this->app->handle($req);
 
         $json = json_decode($response->getBody(), true);
@@ -197,5 +205,107 @@ final class ApiIntegrationTest extends TestCase
         $this->assertNotNull($checkoutRes['body']['data']['orderNumber']);
         $this->assertTrue(str_starts_with($checkoutRes['body']['data']['orderNumber'], 'VH-'));
         $this->assertEquals('pending', $checkoutRes['body']['data']['status']);
+    }
+
+    // -- 6. Database Health Check Endpoints ------------------------------
+
+    public function testDatabaseHealthEndpoints(): void
+    {
+        $res = $this->request('GET', '/api/v1/health');
+        $this->assertEquals(200, $res['status']);
+        $this->assertTrue($res['body']['success']);
+        $this->assertTrue($res['body']['data']['connected']);
+        $this->assertEquals('sqlite', $res['body']['data']['driver']);
+        $this->assertTrue($res['body']['data']['tables_count'] > 0);
+
+        $loginRes = $this->request('POST', '/api/v1/auth/login', [
+            'email' => 'admin@vapehaus.ph',
+            'password' => 'AdminPass123!',
+        ]);
+        $token = $loginRes['body']['data']['token'];
+
+        $adminHealth = $this->request('GET', '/api/v1/admin/db-health', [], [
+            'Authorization' => "Bearer {$token}",
+        ]);
+        $this->assertEquals(200, $adminHealth['status']);
+        $this->assertTrue($adminHealth['body']['data']['connected']);
+    }
+
+    // -- 7. Admin Photo Upload & Product Deletion Flow -------------------
+
+    public function testAdminUploadProductImageAndProductLifecycle(): void
+    {
+        $loginRes = $this->request('POST', '/api/v1/auth/login', [
+            'email' => 'admin@vapehaus.ph',
+            'password' => 'AdminPass123!',
+        ]);
+        $token = $loginRes['body']['data']['token'];
+
+        $testBase64 = 'data:image/webp;base64,' . base64_encode('fake-compressed-webp-image-bytes');
+        $uploadRes = $this->request('POST', '/api/v1/admin/upload-image', [
+            'image_data' => $testBase64,
+        ], [
+            'Authorization' => "Bearer {$token}",
+        ]);
+
+        $this->assertEquals(201, $uploadRes['status']);
+        $this->assertTrue($uploadRes['body']['success']);
+        $this->assertNotNull($uploadRes['body']['data']['url']);
+        $imageUrl = $uploadRes['body']['data']['url'];
+
+        $createRes = $this->request('POST', '/api/v1/admin/products', [
+            'name' => 'Caliburn G3 Pro Pod',
+            'brand' => 'UWELL',
+            'category_id' => 'cat_pod_systems',
+            'price' => 1450.0,
+            'image_url' => $imageUrl,
+            'description' => 'Dynamic screen pod system',
+        ], [
+            'Authorization' => "Bearer {$token}",
+        ]);
+
+        $this->assertEquals(201, $createRes['status']);
+        $this->assertTrue($createRes['body']['success']);
+        $createdId = $createRes['body']['data']['id'];
+        $this->assertEquals($imageUrl, $createRes['body']['data']['image_url']);
+
+        $detailRes = $this->request('GET', "/api/v1/products/{$createdId}");
+        $this->assertEquals(200, $detailRes['status']);
+        $this->assertEquals($imageUrl, $detailRes['body']['data']['image_url']);
+
+        $deleteRes = $this->request('DELETE', "/api/v1/admin/products/{$createdId}", [], [
+            'Authorization' => "Bearer {$token}",
+        ]);
+        $this->assertEquals(200, $deleteRes['status']);
+        $this->assertTrue($deleteRes['body']['success']);
+        $this->assertTrue($deleteRes['body']['data']['deleted']);
+
+        $afterDelete = $this->request('GET', "/api/v1/products/{$createdId}");
+        $this->assertEquals(404, $afterDelete['status']);
+    }
+
+    // -- 8. Admin Dashboard Extended Graph Metrics -----------------------
+
+    public function testAdminDashboardExtendedGraphMetrics(): void
+    {
+        $loginRes = $this->request('POST', '/api/v1/auth/login', [
+            'email' => 'admin@vapehaus.ph',
+            'password' => 'AdminPass123!',
+        ]);
+        $token = $loginRes['body']['data']['token'];
+
+        $dashRes = $this->request('GET', '/api/v1/admin/dashboard', [], [
+            'Authorization' => "Bearer {$token}",
+        ]);
+
+        $this->assertEquals(200, $dashRes['status']);
+        $data = $dashRes['body']['data'];
+
+        $this->assertNotNull($data['revenue_by_day']);
+        $this->assertCount(14, $data['revenue_by_day']);
+        $this->assertTrue(is_array($data['category_distribution']));
+        $this->assertNotNull($data['average_order_value']);
+        $this->assertNotNull($data['order_status_counts']);
+        $this->assertNotNull($data['top_products']);
     }
 }

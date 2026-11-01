@@ -112,7 +112,7 @@ final class User
             return null;
         }
 
-        $dob = DateTimeImmutable::createFromFormat('Y-m-d', $this->birthDate);
+        $dob = DateTimeImmutable::createFromFormat('!Y-m-d', $this->birthDate);
         if (!$dob) {
             return null;
         }

@@ -83,7 +83,7 @@ final class OrderStatus
         }
 
         return match ($this->value) {
-            self::PENDING => in_array($target, [self::PAID, self::CANCELLED], true),
+            self::PENDING => in_array($target, [self::PAID, self::PROCESSING, self::CANCELLED], true),
             self::PAID => in_array($target, [self::PROCESSING, self::CANCELLED], true),
             self::PROCESSING => in_array($target, [self::SHIPPED, self::CANCELLED], true),
             self::SHIPPED => in_array($target, [self::DELIVERED], true),

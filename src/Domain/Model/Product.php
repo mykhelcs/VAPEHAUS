@@ -17,6 +17,7 @@ final class Product
     private ?string $description;
     private bool $isActive;
     private string $createdAt;
+    private ?string $imageUrl;
     /** @var array<string, ProductVariant> */
     private array $variants = [];
 
@@ -32,7 +33,8 @@ final class Product
         ?string $description = null,
         bool $isActive = true,
         ?string $createdAt = null,
-        array $variants = []
+        array $variants = [],
+        ?string $imageUrl = null
     ) {
         $name = trim($name);
         $slug = trim(strtolower($slug));
@@ -55,6 +57,7 @@ final class Product
         $this->description = $description;
         $this->isActive = $isActive;
         $this->createdAt = $createdAt ?? (new DateTimeImmutable())->format('Y-m-d H:i:s');
+        $this->imageUrl = $imageUrl;
 
         foreach ($variants as $variant) {
             $this->addVariant($variant);
@@ -99,6 +102,16 @@ final class Product
     public function getCreatedAt(): string
     {
         return $this->createdAt;
+    }
+
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): void
+    {
+        $this->imageUrl = $imageUrl;
     }
 
     public function addVariant(ProductVariant $variant): void
@@ -156,6 +169,8 @@ final class Product
             'slug' => $this->slug,
             'brand' => $this->brand,
             'description' => $this->description,
+            'image_url' => $this->imageUrl,
+            'imageUrl' => $this->imageUrl,
             'is_active' => $this->isActive,
             'isActive' => $this->isActive,
             'created_at' => $this->createdAt,
