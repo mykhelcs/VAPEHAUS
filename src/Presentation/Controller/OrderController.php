@@ -21,7 +21,20 @@ final class OrderController
     public function checkout(Request $request): Response
     {
         $userId = (string) $request->getAttribute('userId');
-        $order = $this->placeOrderExecution->execute($userId, $request->getBody());
+
+        $data = $request->getBody();
+
+        // Cart operations use X-Session-Token / X-Cart-Token headers for session
+        // identification. Inject the header value into $data so PlaceOrderExecution
+        // can locate the correct guest/session cart when the body omits session_token.
+        if (!isset($data['session_token']) && !isset($data['sessionToken'])) {
+            $sessionToken = $request->getHeader('x-session-token') ?? $request->getHeader('x-cart-token');
+            if ($sessionToken !== null) {
+                $data['session_token'] = $sessionToken;
+            }
+        }
+
+        $order = $this->placeOrderExecution->execute($userId, $data);
 
         return ApiResponse::success($order, [], 201);
     }

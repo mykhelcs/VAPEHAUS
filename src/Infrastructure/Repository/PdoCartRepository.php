@@ -52,18 +52,20 @@ final class PdoCartRepository implements CartRepositoryInterface
         $exists = (int) $stmt->fetchColumn() > 0;
 
         if ($exists) {
-            $stmt = $this->pdo->prepare('UPDATE carts SET user_id = :uid, session_token = :st, updated_at = datetime("now") WHERE id = :id');
+            $stmt = $this->pdo->prepare('UPDATE carts SET user_id = :uid, session_token = :st, applied_coupon_code = :coupon, updated_at = datetime("now") WHERE id = :id');
             $stmt->execute([
-                ':id' => $cart->getId(),
-                ':uid' => $cart->getUserId(),
-                ':st' => $cart->getSessionToken(),
+                ':id'     => $cart->getId(),
+                ':uid'    => $cart->getUserId(),
+                ':st'     => $cart->getSessionToken(),
+                ':coupon' => $cart->getAppliedCouponCode(),
             ]);
         } else {
-            $stmt = $this->pdo->prepare('INSERT INTO carts (id, user_id, session_token, updated_at) VALUES (:id, :uid, :st, datetime("now"))');
+            $stmt = $this->pdo->prepare('INSERT INTO carts (id, user_id, session_token, applied_coupon_code, updated_at) VALUES (:id, :uid, :st, :coupon, datetime("now"))');
             $stmt->execute([
-                ':id' => $cart->getId(),
-                ':uid' => $cart->getUserId(),
-                ':st' => $cart->getSessionToken(),
+                ':id'     => $cart->getId(),
+                ':uid'    => $cart->getUserId(),
+                ':st'     => $cart->getSessionToken(),
+                ':coupon' => $cart->getAppliedCouponCode(),
             ]);
         }
 
@@ -115,7 +117,8 @@ final class PdoCartRepository implements CartRepositoryInterface
             (string) $cartRow['id'],
             $cartRow['user_id'] !== null ? (string) $cartRow['user_id'] : null,
             $cartRow['session_token'] !== null ? (string) $cartRow['session_token'] : null,
-            $items
+            $items,
+            isset($cartRow['applied_coupon_code']) ? (string) $cartRow['applied_coupon_code'] : null
         );
     }
 }

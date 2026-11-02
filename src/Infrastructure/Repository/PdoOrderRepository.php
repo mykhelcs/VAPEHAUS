@@ -30,13 +30,23 @@ final class PdoOrderRepository implements OrderRepositoryInterface
             $stmt = $this->pdo->prepare('UPDATE orders SET
                 status = :status,
                 payment_status = :pstatus,
-                shipping_address = :addr
+                shipping_address = :addr,
+                tracking_number = :tracking,
+                courier_name = :courier,
+                tracking_url = :tracking_url,
+                shipped_at = :shipped_at,
+                delivered_at = :delivered_at
                 WHERE id = :id');
             $stmt->execute([
-                ':id' => $order->getId(),
-                ':status' => $order->getStatus()->getValue(),
-                ':pstatus' => $order->getPaymentStatus(),
-                ':addr' => $order->getShippingAddress(),
+                ':id'           => $order->getId(),
+                ':status'       => $order->getStatus()->getValue(),
+                ':pstatus'      => $order->getPaymentStatus(),
+                ':addr'         => $order->getShippingAddress(),
+                ':tracking'     => $order->getTrackingNumber(),
+                ':courier'      => $order->getCourierName(),
+                ':tracking_url' => $order->getTrackingUrl(),
+                ':shipped_at'   => $order->getShippedAt(),
+                ':delivered_at' => $order->getDeliveredAt(),
             ]);
         } else {
             $stmt = $this->pdo->prepare('INSERT INTO orders (id, order_number, user_id, status, subtotal, shipping_fee, total, shipping_address, payment_method, payment_status, created_at)
@@ -221,6 +231,13 @@ final class PdoOrderRepository implements OrderRepositoryInterface
             (string) $orderRow['shipping_address'],
             (string) $orderRow['payment_method'],
             (string) $orderRow['payment_status'],
+            Money::fromFloat((float) ($orderRow['discount_amount'] ?? 0)),
+            isset($orderRow['coupon_code']) ? (string) $orderRow['coupon_code'] : null,
+            isset($orderRow['tracking_number']) ? (string) $orderRow['tracking_number'] : null,
+            isset($orderRow['courier_name']) ? (string) $orderRow['courier_name'] : null,
+            isset($orderRow['tracking_url']) ? (string) $orderRow['tracking_url'] : null,
+            isset($orderRow['shipped_at']) ? (string) $orderRow['shipped_at'] : null,
+            isset($orderRow['delivered_at']) ? (string) $orderRow['delivered_at'] : null,
             (string) $orderRow['created_at'],
             $items
         );
