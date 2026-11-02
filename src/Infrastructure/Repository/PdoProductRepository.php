@@ -16,6 +16,11 @@ final class PdoProductRepository implements ProductRepositoryInterface
 {
     private PDO $pdo;
 
+    private function getDriver(): string
+    {
+        return strtolower((string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
+    }
+
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
@@ -23,6 +28,33 @@ final class PdoProductRepository implements ProductRepositoryInterface
 
     public function save(Product $product): void
     {
+        $driver = $this->getDriver();
+        if ($driver === 'pgsql' || $driver === 'sqlite') {
+            $sql = 'INSERT INTO products (id, category_id, name, slug, brand, description, image_url, is_active, created_at)
+                VALUES (:id, :cid, :name, :slug, :brand, :desc, :img, :active, :created)
+                ON CONFLICT (id) DO UPDATE SET
+                    category_id = EXCLUDED.category_id,
+                    name = EXCLUDED.name,
+                    slug = EXCLUDED.slug,
+                    brand = EXCLUDED.brand,
+                    description = EXCLUDED.description,
+                    image_url = EXCLUDED.image_url,
+                    is_active = EXCLUDED.is_active';
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([
+                ':id' => $product->getId(),
+                ':cid' => $product->getCategoryId(),
+                ':name' => $product->getName(),
+                ':slug' => $product->getSlug(),
+                ':brand' => $product->getBrand(),
+                ':desc' => $product->getDescription(),
+                ':img' => $product->getImageUrl(),
+                ':active' => $product->isActive() ? 1 : 0,
+                ':created' => $product->getCreatedAt(),
+            ]);
+            return;
+        }
+
         $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM products WHERE id = :id');
         $stmt->execute([':id' => $product->getId()]);
         $exists = (int) $stmt->fetchColumn() > 0;
@@ -108,6 +140,32 @@ final class PdoProductRepository implements ProductRepositoryInterface
 
     public function saveVariant(ProductVariant $variant): void
     {
+        $driver = $this->getDriver();
+        if ($driver === 'pgsql' || $driver === 'sqlite') {
+            $sql = 'INSERT INTO product_variants (id, product_id, sku, flavor, nicotine_strength, price, stock_quantity, is_active)
+                VALUES (:id, :pid, :sku, :flavor, :nic, :price, :stock, :active)
+                ON CONFLICT (id) DO UPDATE SET
+                    product_id = EXCLUDED.product_id,
+                    sku = EXCLUDED.sku,
+                    flavor = EXCLUDED.flavor,
+                    nicotine_strength = EXCLUDED.nicotine_strength,
+                    price = EXCLUDED.price,
+                    stock_quantity = EXCLUDED.stock_quantity,
+                    is_active = EXCLUDED.is_active';
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute([
+                ':id' => $variant->getId(),
+                ':pid' => $variant->getProductId(),
+                ':sku' => $variant->getSku()->getValue(),
+                ':flavor' => $variant->getFlavor(),
+                ':nic' => $variant->getNicotineStrength()->getValue(),
+                ':price' => $variant->getPrice()->toFloat(),
+                ':stock' => $variant->getStockQuantity(),
+                ':active' => $variant->isActive() ? 1 : 0,
+            ]);
+            return;
+        }
+
         $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM product_variants WHERE id = :id');
         $stmt->execute([':id' => $variant->getId()]);
         $exists = (int) $stmt->fetchColumn() > 0;

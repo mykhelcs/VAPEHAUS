@@ -28,14 +28,15 @@ const StorefrontApp = {
     this.setupMobileMenu();
     this.setupAdminActionModals();
 
-    // 3. Subscribe to Store updates to re-render products and user state
-    Store.subscribe(() => {
-      this.setupCategories();
-      this.renderProducts();
-    });
-
-    // 4. Asynchronously fetch live catalog from API
-    await this.loadCatalog();
+    // 3. Only subscribe and load storefront catalog if on storefront view
+    const isStorefront = !!document.getElementById('products-grid-container');
+    if (isStorefront) {
+      Store.subscribe(() => {
+        this.setupCategories();
+        this.renderProducts();
+      });
+      await this.loadCatalog();
+    }
   },
 
   async loadCatalog() {
@@ -339,8 +340,8 @@ const StorefrontApp = {
           <h2 style="font-size: 1.4rem; margin-bottom: 12px;">Sign in to your account</h2>
           <p style="color: var(--text-muted); margin-bottom: 24px;">Track orders, manage addresses, and complete statutory 18+ age verification.</p>
           <div style="display: flex; gap: 12px; justify-content: center;">
-            <button class="btn btn-cyan" onclick="AuthModal.open('login')">Sign In</button>
-            <button class="btn btn-secondary" onclick="AuthModal.open('register')">Register Adult Account</button>
+            <button class="btn btn-cyan" onclick="AuthModal.openLogin()">Sign In</button>
+            <button class="btn btn-secondary" onclick="AuthModal.openRegister()">Register Adult Account</button>
           </div>
         </div>
       `;
@@ -588,17 +589,58 @@ const AdminActionModals = {
         statsEl.innerHTML = `Original: <b>${origKb} KB</b> → Compressed: <b>${compKb} KB</b> <span style="color: var(--cyan);">(-${compressed.savingsPercent}%)</span>`;
       }
 
-      // Upload to backend storage
-      const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
-      if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
-        if (hiddenUrlInput) hiddenUrlInput.value = uploadRes.data.url;
-        Toast.success(`Image optimized & uploaded (${compKb} KB).`);
+      // Direct Supabase Storage upload or server relay
+      let uploadedUrl = null;
+      const cleanFilename = 'prod_' + Math.random().toString(36).substring(2, 10) + '.webp';
+
+      // 1. Attempt direct frontend upload to Supabase Storage
+      try {
+        if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+          const byteString = atob(compressed.dataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: 'image/webp' });
+
+          const directEndpoint = `${CONFIG.SUPABASE_URL}/storage/v1/object/products/${cleanFilename}`;
+          const directRes = await fetch(directEndpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+              'apikey': CONFIG.SUPABASE_ANON_KEY,
+              'Content-Type': 'image/webp',
+              'x-upsert': 'true',
+            },
+            body: blob,
+          });
+
+          if (directRes.ok) {
+            uploadedUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/public/products/${cleanFilename}`;
+          }
+        }
+      } catch (directErr) {
+        console.warn('Direct Supabase upload notice, using backend adapter:', directErr);
+      }
+
+      // 2. Fallback to API relay (which uploads to Supabase Storage via service key, zero disk writes)
+      if (!uploadedUrl) {
+        const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
+        if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+          uploadedUrl = uploadRes.data.url;
+        }
+      }
+
+      if (uploadedUrl) {
+        if (hiddenUrlInput) hiddenUrlInput.value = uploadedUrl;
+        Toast.success(`Image stored in Supabase CDN (${compKb} KB).`);
       } else {
         if (hiddenUrlInput) hiddenUrlInput.value = compressed.dataUrl;
       }
     } catch (err) {
-      console.error('Image compression error:', err);
-      Toast.error('Failed to compress image: ' + err.message);
+      console.error('Image upload error:', err);
+      Toast.error('Failed to upload image: ' + err.message);
     }
   },
   async submitAddProduct(event) {
@@ -639,8 +681,18 @@ const AdminActionModals = {
 
       const res = await Api.addProduct(payload);
       if (res && res.success) {
-        Store.addProduct({ ...payload, id: res.data.id || undefined });
-        Toast.success(`Product "${res.data.name || name}" added to catalog.`);
+        const addedProduct = Store.addProduct({
+          ...payload,
+          id: res.data?.id || undefined,
+          variants: res.data?.variants || payload.variants,
+        });
+
+        // O(1) Instant incremental DOM update if on Admin Portal
+        if (typeof AdminApp !== 'undefined' && typeof AdminApp.prependProductRow === 'function') {
+          AdminApp.prependProductRow(addedProduct);
+        }
+
+        Toast.success(`Product "${res.data?.name || name}" added to catalog.`);
         this.closeAddProduct();
         document.getElementById('admin-add-product-form').reset();
       } else {

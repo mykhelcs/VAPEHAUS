@@ -6,7 +6,38 @@
 class VapehausStore {
   constructor() {
     this.listeners = [];
+    this._productIndex = new Map();
+    this._variantIndex = new Map();
+    this._slugIndex = new Map();
     this.state = this.loadInitialState();
+    this._rebuildIndices();
+  }
+
+  _rebuildIndices() {
+    this._productIndex.clear();
+    this._variantIndex.clear();
+    this._slugIndex.clear();
+
+    const products = Array.isArray(this.state?.products) ? this.state.products : [];
+    for (const p of products) {
+      this._indexProduct(p);
+    }
+  }
+
+  _indexProduct(product) {
+    if (!product || !product.id) return;
+    this._productIndex.set(product.id, product);
+    if (product.slug) {
+      this._slugIndex.set(product.slug, product);
+    }
+
+    if (Array.isArray(product.variants)) {
+      for (const v of product.variants) {
+        if (v && v.id) {
+          this._variantIndex.set(v.id, { variant: v, product });
+        }
+      }
+    }
   }
 
   getInitialSeedData() {
@@ -199,6 +230,7 @@ class VapehausStore {
 
   setProducts(products) {
     this.state.products = Array.isArray(products) ? products : [];
+    this._rebuildIndices();
     this.save();
   }
 
@@ -232,18 +264,22 @@ class VapehausStore {
     return this.state.products;
   }
 
+  // O(1) constant-time hash map lookup by Product ID
   getProductById(id) {
-    return this.state.products.find((p) => p.id === id);
+    if (!id) return null;
+    return this._productIndex.get(id) || null;
   }
 
+  // O(1) constant-time hash map lookup by Product Slug
+  getProductBySlug(slug) {
+    if (!slug) return null;
+    return this._slugIndex.get(slug) || null;
+  }
+
+  // O(1) constant-time hash map lookup by Variant ID
   getVariantById(variantId) {
-    for (const product of this.state.products) {
-      const variant = product.variants.find((v) => v.id === variantId);
-      if (variant) {
-        return { variant, product };
-      }
-    }
-    return null;
+    if (!variantId) return null;
+    return this._variantIndex.get(variantId) || null;
   }
 
   getCategories() {
@@ -534,20 +570,21 @@ class VapehausStore {
     return order;
   }
 
+  // O(1) constant-time catalog product addition and hash indexing
   addProduct(productData) {
     if (!this.isAdmin()) {
       throw new Error('Access Denied: Only administrators can add products to catalog.');
     }
 
-    const newId = 'prod_' + (this.state.products.length + 1);
-    const slug = productData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const newId = productData.id || ('prod_' + (this.state.products.length + 1));
+    const slug = (productData.slug || productData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
 
     const newProduct = {
       id: newId,
       name: productData.name,
       slug,
       brand: (productData.brand || 'VAPEHAUS').toUpperCase(),
-      category: productData.category || 'devices',
+      category: productData.category || productData.category_id || 'devices',
       description: productData.description || 'Premium authentic vaping hardware.',
       rating: 5.0,
       reviewsCount: 1,
@@ -557,13 +594,13 @@ class VapehausStore {
       imageUrl: productData.imageUrl || productData.image_url || null,
       image_url: productData.imageUrl || productData.image_url || null,
       variants: (productData.variants || []).map((v, idx) => ({
-        id: `var_${newId}_${idx + 1}`,
-        sku: `${(productData.brand || 'VPH').substring(0, 3).toUpperCase()}-${slug.substring(0, 5).toUpperCase()}-${idx + 1}`,
+        id: v.id || `var_${newId}_${idx + 1}`,
+        sku: v.sku || `${(productData.brand || 'VPH').substring(0, 3).toUpperCase()}-${slug.substring(0, 5).toUpperCase()}-${idx + 1}`,
         flavor: v.flavor || 'Standard',
-        nicotine: v.nicotine || '20mg',
+        nicotine: v.nicotine || v.nicotine_strength || '20mg',
         price: parseFloat(v.price) || 1290.0,
         originalPrice: v.originalPrice ? parseFloat(v.originalPrice) : null,
-        stock: parseInt(v.stock, 10) || 20,
+        stock: parseInt(v.stock ?? v.stock_quantity, 10) || 20,
       })),
     };
 
@@ -575,11 +612,12 @@ class VapehausStore {
         nicotine: '20mg',
         price: parseFloat(productData.price) || 1290.0,
         originalPrice: null,
-        stock: 20,
+        stock: parseInt(productData.stock, 10) || 20,
       });
     }
 
     this.state.products.unshift(newProduct);
+    this._indexProduct(newProduct); // O(1) hash map indexing
     this.save();
     return newProduct;
   }
@@ -591,13 +629,19 @@ class VapehausStore {
     const idx = this.state.products.findIndex((p) => p.id === productId);
     if (idx !== -1) {
       const removed = this.state.products.splice(idx, 1)[0];
+      this._productIndex.delete(productId);
+      if (removed.slug) this._slugIndex.delete(removed.slug);
+      if (Array.isArray(removed.variants)) {
+        for (const v of removed.variants) {
+          if (v && v.id) this._variantIndex.delete(v.id);
+        }
+      }
       this.state.cart.items = this.state.cart.items.filter((item) => item.productId !== productId);
       this.save();
       return removed;
     }
     return null;
   }
-
   createCoupon(couponData) {
     if (!this.isAdmin()) {
       throw new Error('Access Denied: Only administrators can create promotional coupons.');

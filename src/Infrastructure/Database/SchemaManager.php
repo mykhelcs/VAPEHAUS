@@ -10,10 +10,35 @@ use Vapehaus\Infrastructure\Security\PasswordHasher;
 final class SchemaManager
 {
     private PDO $pdo;
+    private static bool $initialized = false;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
+    }
+
+    public static function ensureInitialized(PDO $pdo, bool $force = false): void
+    {
+        if (self::$initialized && !$force) {
+            return;
+        }
+
+        $markerFile = dirname(__DIR__, 3) . '/database/.schema_initialized';
+        if (file_exists($markerFile) && !$force) {
+            self::$initialized = true;
+            return;
+        }
+
+        $schema = new self($pdo);
+        $schema->createTables();
+        $schema->seedDefaults();
+
+        $dbDir = dirname($markerFile);
+        if (!is_dir($dbDir)) {
+            @mkdir($dbDir, 0777, true);
+        }
+        @file_put_contents($markerFile, date('c'));
+        self::$initialized = true;
     }
 
     private function getDriver(): string
@@ -342,6 +367,21 @@ final class SchemaManager
             }
         } catch (\Throwable $e) {
             // Ignore if column already exists or table not ready
+        }
+
+        // Performance Optimization: Indexes for O(1) B-tree lookups
+        $indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)',
+            'CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug)',
+            'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
+            'CREATE INDEX IF NOT EXISTS idx_variants_sku ON product_variants(sku)',
+        ];
+        foreach ($indexes as $idxSql) {
+            try {
+                $this->pdo->exec($idxSql);
+            } catch (\Throwable $e) {
+                // Ignore if index already exists or syntax unsupported
+            }
         }
     }
 

@@ -47,6 +47,7 @@ use Vapehaus\Infrastructure\Database\SchemaManager;
 use Vapehaus\Infrastructure\Environment\Env;
 use Vapehaus\Infrastructure\Notification\PdoNotificationService;
 use Vapehaus\Infrastructure\Payment\PayMongoGateway;
+use Vapehaus\Infrastructure\Storage\SupabaseStorageAdapter;
 use Vapehaus\Infrastructure\Repository\PdoAddressRepository;
 use Vapehaus\Infrastructure\Repository\PdoCartRepository;
 use Vapehaus\Infrastructure\Repository\PdoCategoryRepository;
@@ -99,9 +100,7 @@ final class App
 
     private function initializeDatabase(): void
     {
-        $schema = new SchemaManager($this->pdo);
-        $schema->createTables();
-        $schema->seedDefaults();
+        SchemaManager::ensureInitialized($this->pdo);
     }
 
     private function registerRoutes(): void
@@ -178,7 +177,8 @@ final class App
 
         $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo, $this->pdo);
         $adminDeleteProductExec = new AdminDeleteProductExecution($productRepo);
-        $uploadImageExec = new UploadProductImageExecution();
+        $supabaseStorage = new SupabaseStorageAdapter();
+        $uploadImageExec = new UploadProductImageExecution($supabaseStorage);
         $checkDbHealthExec = new CheckDatabaseHealthExecution($this->pdo);
         $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
         $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);

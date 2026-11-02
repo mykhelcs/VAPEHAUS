@@ -671,18 +671,21 @@ const AdminApp = {
       return;
     }
 
-    tableBody.innerHTML = products.map((p) => {
-      const c1 = p.color1 || '#8b5cf6';
-      const c2 = p.color2 || '#22d3ee';
-      const variants = p.variants || [];
-      const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
-      const imgUrl = p.imageUrl || p.image_url;
-      const imgHtml = imgUrl
-        ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;">`
-        : `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
+    tableBody.innerHTML = products.map((p) => this.renderProductRow(p)).join('');
+  },
 
-      return `
-      <tr>
+  renderProductRow(p) {
+    const c1 = p.color1 || '#8b5cf6';
+    const c2 = p.color2 || '#22d3ee';
+    const variants = p.variants || [];
+    const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
+    const imgUrl = p.imageUrl || p.image_url;
+    const imgHtml = imgUrl
+      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;">`
+      : `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
+
+    return `
+      <tr id="row-prod-${p.id}">
         <td>
           <div style="display: flex; align-items: center; gap: 12px;">
             ${imgHtml}
@@ -718,7 +721,30 @@ const AdminApp = {
           </button>
         </td>
       </tr>
-    `;}).join('');
+    `;
+  },
+
+  // O(1) incremental DOM addition without full table re-render
+  prependProductRow(p) {
+    const tableBody = document.getElementById('inventory-table-tbody');
+    if (!tableBody) return;
+
+    const existing = document.getElementById(`row-prod-${p.id}`);
+    if (existing) {
+      existing.outerHTML = this.renderProductRow(p);
+      return;
+    }
+
+    const emptyRow = tableBody.querySelector('td[colspan="4"]');
+    if (emptyRow) {
+      tableBody.innerHTML = '';
+    }
+
+    const temp = document.createElement('tbody');
+    temp.innerHTML = this.renderProductRow(p);
+    if (temp.firstElementChild) {
+      tableBody.insertBefore(temp.firstElementChild, tableBody.firstElementChild);
+    }
   },
 
   async deleteProduct(productId, productName) {

@@ -45,12 +45,14 @@ const OrderTrackerModal = {
 
   cancelOrder(orderId) {
     if (!confirm('Are you sure you want to cancel this order?')) return;
-    try {
-      Store.updateOrderStatus(orderId, OrderStatus.CANCELLED);
-      Toast.info(`Order #${orderId} was cancelled.`);
-    } catch (err) {
-      Toast.error(err.message);
-    }
+    Api.cancelOrder(orderId)
+      .then(() => {
+        Toast.info(`Order #${orderId} was cancelled.`);
+        this.render();
+      })
+      .catch((err) => {
+        Toast.error(err.message || 'Failed to cancel order. Please contact support.');
+      });
   },
 
   render() {
@@ -79,7 +81,7 @@ const OrderTrackerModal = {
     contentEl.innerHTML = `
       <div class="order-success-body">
         <div class="order-success-icon">${isCancelled ? '❌' : '📦'}</div>
-        <h2 style="font-size: 1.6rem;">${isCancelled ? 'Order Cancelled' : 'Order Confirmed & In Progress'}</h2>
+        <h2 style="font-size: 1.6rem;">${isCancelled ? 'Order Cancelled' : 'Order Confirmed &amp; In Progress'}</h2>
         <div class="order-number-banner">Order #${order.orderNumber || order.order_number || order.id}</div>
 
         <!-- 5-Stage Stepper -->
