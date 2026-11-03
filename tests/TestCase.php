@@ -11,6 +11,7 @@ abstract class TestCase
 {
     private int $assertionCount = 0;
     private ?string $expectedException = null;
+    private ?string $expectedExceptionMessage = null;
 
     public function getAssertionCount(): int
     {
@@ -29,6 +30,7 @@ abstract class TestCase
     {
         $this->setUp();
         $this->expectedException = null;
+        $this->expectedExceptionMessage = null;
         $thrown = null;
 
         try {
@@ -46,6 +48,9 @@ abstract class TestCase
             if (!($thrown instanceof $this->expectedException)) {
                 throw new Exception("Failed asserting that thrown " . get_class($thrown) . " matches {$this->expectedException}. Message: " . $thrown->getMessage());
             }
+            if ($this->expectedExceptionMessage !== null && !str_contains($thrown->getMessage(), $this->expectedExceptionMessage)) {
+                throw new Exception("Failed asserting that thrown message '{$thrown->getMessage()}' contains '{$this->expectedExceptionMessage}'.");
+            }
         } elseif ($thrown !== null) {
             throw $thrown;
         }
@@ -54,6 +59,11 @@ abstract class TestCase
     protected function expectException(string $exceptionClass): void
     {
         $this->expectedException = $exceptionClass;
+    }
+
+    protected function expectExceptionMessage(string $message): void
+    {
+        $this->expectedExceptionMessage = $message;
     }
 
     protected function assertTrue(bool $condition, string $message = ''): void

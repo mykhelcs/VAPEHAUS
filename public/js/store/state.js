@@ -405,6 +405,30 @@ class VapehausStore {
     this.save();
   }
 
+  /**
+   * Prunes cart items whose variantId does not exist in the active indexed catalog.
+   * Returns the count of orphaned items removed.
+   */
+  pruneOrphanedCartItems() {
+    if (!Array.isArray(this.state?.cart?.items) || this.state.cart.items.length === 0) {
+      return 0;
+    }
+    if (!Array.isArray(this.state.products) || this.state.products.length === 0) {
+      return 0;
+    }
+
+    const beforeCount = this.state.cart.items.length;
+    this.state.cart.items = this.state.cart.items.filter((item) => {
+      return !!this.getVariantById(item.variantId);
+    });
+
+    const removedCount = beforeCount - this.state.cart.items.length;
+    if (removedCount > 0) {
+      this.save();
+    }
+    return removedCount;
+  }
+
   clearCart() {
     this.state.cart.items = [];
     this.state.cart.appliedCouponCode = null;

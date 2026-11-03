@@ -411,6 +411,66 @@
     </div>
   </div>
 
+  <!-- Admin Modal: Edit Catalog Product -->
+  <div class="modal-overlay" id="admin-edit-product-modal">
+    <div class="modal-card" style="max-width: 600px;">
+      <button class="modal-close-btn" onclick="AdminActionModals.closeEditProduct()">✕</button>
+      <div style="padding: 30px;">
+        <h2 style="font-size: 1.4rem; margin-bottom: 20px;">Edit Catalog Product</h2>
+        <form id="admin-edit-product-form" onsubmit="AdminActionModals.submitEditProduct(event)">
+          <input type="hidden" id="admin-edit-prod-id">
+          <div class="input-group">
+            <label class="input-label">Product Name <span class="required">*</span></label>
+            <input type="text" id="admin-edit-prod-name" class="input-control" required>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Product Photo <span style="font-size: 0.75rem; color: var(--cyan); font-weight: normal;">(Auto-compressed &lt; 120KB)</span></label>
+            <input type="file" id="admin-edit-prod-image" class="input-control" accept="image/*" onchange="AdminActionModals.handleEditImageSelect(event)">
+            <div id="admin-edit-image-preview-container" style="display: flex; margin-top: 10px; align-items: center; gap: 14px; background: var(--surface2); padding: 10px; border-radius: var(--r-md); border: 1px solid var(--line);">
+              <img id="admin-edit-image-preview-thumb" src="" alt="Product Preview" style="width: 54px; height: 54px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line);">
+              <div style="font-size: 0.8rem;">
+                <div id="admin-edit-image-stats" style="color: var(--text-muted);">Current product image</div>
+                <div style="color: var(--cyan); font-weight: 600;">✓ Select a new file above to replace</div>
+              </div>
+            </div>
+            <input type="hidden" id="admin-edit-prod-image-url">
+          </div>
+          <div class="form-grid-2">
+            <div class="input-group">
+              <label class="input-label">Brand <span class="required">*</span></label>
+              <input type="text" id="admin-edit-prod-brand" class="input-control" required>
+            </div>
+            <div class="input-group">
+              <label class="input-label">Category</label>
+              <select id="admin-edit-prod-cat" class="select-control">
+                <option value="cat_devices">Devices & Mods</option>
+                <option value="cat_pod_systems">Pod Systems</option>
+                <option value="cat_disposables">Disposables</option>
+                <option value="cat_eliquids">E-Liquids & Salts</option>
+                <option value="cat_coils">Coils & Pods</option>
+              </select>
+            </div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Status</label>
+            <select id="admin-edit-prod-status" class="select-control">
+              <option value="1">Active (Visible in Catalog)</option>
+              <option value="0">Draft / Inactive (Hidden)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Product Description</label>
+            <textarea id="admin-edit-prod-desc" class="textarea-control" placeholder="Enter specifications, tank capacity, battery info..."></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+            <button type="button" class="btn btn-secondary" onclick="AdminActionModals.closeEditProduct()">Cancel</button>
+            <button type="submit" class="btn btn-cyan">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Admin Modal: Create Promo Code -->
   <div class="modal-overlay" id="admin-create-coupon-modal">
     <div class="modal-card" style="max-width: 480px;">

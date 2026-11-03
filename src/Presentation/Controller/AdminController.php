@@ -13,6 +13,7 @@ use Vapehaus\Execution\Admin\AdminGetDashboardExecution;
 use Vapehaus\Execution\Admin\AdminListCustomersExecution;
 use Vapehaus\Execution\Admin\AdminListOrdersExecution;
 use Vapehaus\Execution\Admin\AdminUpdateOrderStatusExecution;
+use Vapehaus\Execution\Admin\AdminUpdateProductExecution;
 use Vapehaus\Execution\Admin\AdminUpdateStockExecution;
 use Vapehaus\Execution\Admin\UploadProductImageExecution;
 use Vapehaus\Execution\Order\AdminShipOrderExecution;
@@ -36,6 +37,7 @@ final class AdminController
     private ?AdminShipOrderExecution $shipOrderExecution;
     private ?InventoryAuditRepositoryInterface $auditRepo;
     private ?AdminDeleteProductExecution $deleteProductExecution;
+    private ?AdminUpdateProductExecution $updateProductExecution;
     private ?UploadProductImageExecution $uploadImageExecution;
     private ?CheckDatabaseHealthExecution $checkDbHealthExecution;
 
@@ -52,6 +54,7 @@ final class AdminController
         ?AdminShipOrderExecution $shipOrderExecution = null,
         ?InventoryAuditRepositoryInterface $auditRepo = null,
         ?AdminDeleteProductExecution $deleteProductExecution = null,
+        ?AdminUpdateProductExecution $updateProductExecution = null,
         ?UploadProductImageExecution $uploadImageExecution = null,
         ?CheckDatabaseHealthExecution $checkDbHealthExecution = null
     ) {
@@ -67,6 +70,7 @@ final class AdminController
         $this->shipOrderExecution = $shipOrderExecution;
         $this->auditRepo = $auditRepo;
         $this->deleteProductExecution = $deleteProductExecution;
+        $this->updateProductExecution = $updateProductExecution;
         $this->uploadImageExecution = $uploadImageExecution;
         $this->checkDbHealthExecution = $checkDbHealthExecution;
     }
@@ -87,6 +91,18 @@ final class AdminController
     {
         $product = $this->createProductExecution->execute($request->getBody());
         return ApiResponse::success($product, [], 201);
+    }
+
+    /**
+     * @param array{id: string} $params
+     */
+    public function updateProduct(Request $request, array $params): Response
+    {
+        if ($this->updateProductExecution === null) {
+            return ApiResponse::error('NOT_IMPLEMENTED', 'Update product execution is not configured.');
+        }
+        $product = $this->updateProductExecution->execute($params['id'], $request->getBody());
+        return ApiResponse::success($product);
     }
 
     /**

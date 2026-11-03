@@ -379,9 +379,11 @@ const AdminApp = {
     }
 
     tableEl.innerHTML = topProducts.map((p) => {
-      const imgHtml = p.image_url
-        ? `<img src="${p.image_url}" alt="${p.name}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line);">`
-        : `<div style="width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent2));"></div>`;
+      const fallbackArt = `<div style="width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent2));"></div>`;
+      const rawImg = p.image_url;
+      const imgHtml = (rawImg ? (typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg) : null)
+        ? `<img src="${typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg}" alt="${p.name}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line);" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
+        : fallbackArt;
 
       return `
         <tr>
@@ -679,10 +681,12 @@ const AdminApp = {
     const c2 = p.color2 || '#22d3ee';
     const variants = p.variants || [];
     const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
-    const imgUrl = p.imageUrl || p.image_url;
+    const rawImg = p.imageUrl || p.image_url;
+    const imgUrl = typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg;
+    const fallbackArt = `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
     const imgHtml = imgUrl
-      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;">`
-      : `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
+      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
+      : fallbackArt;
 
     return `
       <tr id="row-prod-${p.id}">
@@ -715,7 +719,10 @@ const AdminApp = {
             ${totalUnits} Units Total
           </span>
         </td>
-        <td style="text-align: right;">
+        <td style="text-align: right; white-space: nowrap;">
+          <button class="btn btn-secondary btn-sm" style="margin-right: 6px;" onclick="AdminActionModals.openEditProduct('${p.id}')" title="Edit Product Details">
+            ✏️ Edit
+          </button>
           <button class="btn btn-danger btn-sm" onclick="AdminApp.deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Delete Product from Catalog">
             🗑️ Delete
           </button>

@@ -51,21 +51,25 @@ final class PdoCartRepository implements CartRepositoryInterface
         $stmt->execute([':id' => $cart->getId()]);
         $exists = (int) $stmt->fetchColumn() > 0;
 
+        $now = date('Y-m-d H:i:s');
+
         if ($exists) {
-            $stmt = $this->pdo->prepare('UPDATE carts SET user_id = :uid, session_token = :st, applied_coupon_code = :coupon, updated_at = datetime("now") WHERE id = :id');
+            $stmt = $this->pdo->prepare('UPDATE carts SET user_id = :uid, session_token = :st, applied_coupon_code = :coupon, updated_at = :updated WHERE id = :id');
             $stmt->execute([
-                ':id'     => $cart->getId(),
-                ':uid'    => $cart->getUserId(),
-                ':st'     => $cart->getSessionToken(),
-                ':coupon' => $cart->getAppliedCouponCode(),
+                ':id'      => $cart->getId(),
+                ':uid'     => $cart->getUserId(),
+                ':st'      => $cart->getSessionToken(),
+                ':coupon'  => $cart->getAppliedCouponCode(),
+                ':updated' => $now,
             ]);
         } else {
-            $stmt = $this->pdo->prepare('INSERT INTO carts (id, user_id, session_token, applied_coupon_code, updated_at) VALUES (:id, :uid, :st, :coupon, datetime("now"))');
+            $stmt = $this->pdo->prepare('INSERT INTO carts (id, user_id, session_token, applied_coupon_code, updated_at) VALUES (:id, :uid, :st, :coupon, :updated)');
             $stmt->execute([
-                ':id'     => $cart->getId(),
-                ':uid'    => $cart->getUserId(),
-                ':st'     => $cart->getSessionToken(),
-                ':coupon' => $cart->getAppliedCouponCode(),
+                ':id'      => $cart->getId(),
+                ':uid'     => $cart->getUserId(),
+                ':st'      => $cart->getSessionToken(),
+                ':coupon'  => $cart->getAppliedCouponCode(),
+                ':updated' => $now,
             ]);
         }
 

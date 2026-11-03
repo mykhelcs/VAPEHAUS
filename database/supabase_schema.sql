@@ -309,7 +309,7 @@ CREATE POLICY "deny_anon_notif" ON notifications_log FOR ALL TO anon, authentica
 
 -- ── 18. SESSIONS (Bearer tokens) ─────────────────────────────────────────
 CREATE TABLE sessions (
-    token      VARCHAR(128) PRIMARY KEY,
+    token      VARCHAR(512) PRIMARY KEY,
     user_id    VARCHAR(64)  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     ip_address VARCHAR(45),
     user_agent TEXT,
@@ -319,17 +319,37 @@ CREATE TABLE sessions (
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "deny_anon_sessions" ON sessions FOR ALL TO anon, authenticated USING (false);
 
--- ── INDEXES ───────────────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_products_category  ON products(category_id);
-CREATE INDEX IF NOT EXISTS idx_products_active    ON products(is_active);
-CREATE INDEX IF NOT EXISTS idx_variants_product   ON product_variants(product_id);
-CREATE INDEX IF NOT EXISTS idx_orders_user        ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_status      ON orders(status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_sessions_user      ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires   ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_reviews_product    ON product_reviews(product_id, status);
+-- ── 19. OTP VERIFICATIONS (Registration & Password Reset) ────────────────
+CREATE TABLE otp_verifications (
+    id          VARCHAR(64)  PRIMARY KEY,
+    email       VARCHAR(191) NOT NULL,
+    otp_code    VARCHAR(10)  NOT NULL,
+    purpose     VARCHAR(30)  NOT NULL DEFAULT 'registration',
+    is_consumed INTEGER      NOT NULL DEFAULT 0,
+    expires_at  TIMESTAMPTZ  NOT NULL,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+ALTER TABLE otp_verifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "deny_anon_otp" ON otp_verifications FOR ALL TO anon, authenticated USING (false);
 
--- ── SUPABASE STORAGE (KYC ID Images) ─────────────────────────────────────
+-- ── INDEXES ───────────────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_products_category   ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_slug       ON products(slug);
+CREATE INDEX IF NOT EXISTS idx_products_active     ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_variants_product    ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_variants_sku        ON product_variants(sku);
+CREATE INDEX IF NOT EXISTS idx_carts_user          ON carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_carts_session_token ON carts(session_token);
+CREATE INDEX IF NOT EXISTS idx_cart_items_cart     ON cart_items(cart_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user         ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status       ON orders(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_user       ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires    ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_product     ON product_reviews(product_id, status);
+CREATE INDEX IF NOT EXISTS idx_otp_email_purpose   ON otp_verifications(email, purpose);
+
+-- ── SUPABASE STORAGE (KYC ID Images & Products) ───────────────────────────
+-- 1. KYC Documents Bucket (Private)
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('kyc-documents', 'kyc-documents', false)
 ON CONFLICT (id) DO NOTHING;
@@ -341,3 +361,29 @@ CREATE POLICY "allow_kyc_upload" ON storage.objects
 CREATE POLICY "deny_public_kyc_download" ON storage.objects
     FOR SELECT TO anon, authenticated
     USING (false);
+
+-- 2. Products Bucket (Public)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'products',
+    'products',
+    true,
+    5242880,
+    ARRAY['image/webp', 'image/jpeg', 'image/png']
+)
+ON CONFLICT (id) DO UPDATE SET
+    public = true,
+    file_size_limit = 5242880,
+    allowed_mime_types = ARRAY['image/webp', 'image/jpeg', 'image/png'];
+
+CREATE POLICY "public_read_products_storage" ON storage.objects
+    FOR SELECT TO public
+    USING (bucket_id = 'products');
+
+CREATE POLICY "allow_products_upload" ON storage.objects
+    FOR INSERT TO anon, authenticated
+    WITH CHECK (bucket_id = 'products');
+
+CREATE POLICY "allow_products_update" ON storage.objects
+    FOR UPDATE TO anon, authenticated
+    USING (bucket_id = 'products');

@@ -9,6 +9,7 @@ use Vapehaus\Domain\Exception\UnderageException;
 use Vapehaus\Domain\Exception\ValidationException;
 use Vapehaus\Domain\Model\Session;
 use Vapehaus\Domain\Model\User;
+use Vapehaus\Domain\Repository\OtpRepositoryInterface;
 use Vapehaus\Domain\Repository\SessionRepositoryInterface;
 use Vapehaus\Domain\Repository\UserRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Email;
@@ -23,19 +24,22 @@ final class RegisterUserExecution
     private TokenServiceInterface $tokenService;
     private int $minimumAge;
     private ?SessionRepositoryInterface $sessionRepository;
+    private ?OtpRepositoryInterface $otpRepository;
 
     public function __construct(
         UserRepositoryInterface $userRepository,
         PasswordHasherInterface $passwordHasher,
         TokenServiceInterface $tokenService,
         int $minimumAge = 18,
-        ?SessionRepositoryInterface $sessionRepository = null
+        ?SessionRepositoryInterface $sessionRepository = null,
+        ?OtpRepositoryInterface $otpRepository = null
     ) {
         $this->userRepository = $userRepository;
         $this->passwordHasher = $passwordHasher;
         $this->tokenService = $tokenService;
         $this->minimumAge = $minimumAge;
         $this->sessionRepository = $sessionRepository;
+        $this->otpRepository = $otpRepository;
     }
 
     /**
@@ -50,6 +54,7 @@ final class RegisterUserExecution
         $lastName = trim((string) ($data['last_name'] ?? $data['lastName'] ?? ''));
         $birthDate = trim((string) ($data['birth_date'] ?? $data['birthDate'] ?? ''));
         $isAgeVerified = (bool) ($data['is_age_verified'] ?? $data['isAgeAttested'] ?? false);
+        $otp = trim((string) ($data['otp'] ?? $data['code'] ?? ''));
 
         $errors = [];
         if ($emailStr === '') {
@@ -82,6 +87,22 @@ final class RegisterUserExecution
             throw new ValidationException("Email '{$email->getValue()}' is already registered.", [
                 ['field' => 'email', 'issue' => 'Already taken'],
             ]);
+        }
+
+        // Validate OTP if repository is configured
+        if ($this->otpRepository !== null) {
+            $isVerified = false;
+            if ($otp !== '') {
+                $isVerified = $this->otpRepository->verifyAndConsumeOtp($email->getValue(), $otp, 'registration');
+            } else {
+                $isVerified = $this->otpRepository->isOtpVerified($email->getValue(), 'registration');
+            }
+
+            if (!$isVerified) {
+                throw new ValidationException('Valid email OTP verification code is required to create an account.', [
+                    ['field' => 'otp', 'issue' => 'Invalid or expired OTP code'],
+                ]);
+            }
         }
 
         // Age Verification

@@ -144,17 +144,25 @@ final class User
 
     public function toArray(): array
     {
+        $fullName = $this->getFullName();
         return [
             'id' => $this->id,
             'email' => $this->email->getValue(),
+            'name' => $fullName !== '' ? $fullName : $this->firstName,
             'first_name' => $this->firstName,
+            'firstName' => $this->firstName,
             'last_name' => $this->lastName,
-            'full_name' => $this->getFullName(),
+            'lastName' => $this->lastName,
+            'full_name' => $fullName,
+            'fullName' => $fullName,
             'phone' => $this->phone,
             'role' => $this->role->getValue(),
             'birth_date' => $this->birthDate,
+            'birthDate' => $this->birthDate,
             'is_age_verified' => $this->isAgeVerified,
+            'isAgeVerified' => $this->isAgeVerified,
             'created_at' => $this->createdAt,
+            'createdAt' => $this->createdAt,
         ];
     }
 }

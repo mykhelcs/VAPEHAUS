@@ -45,6 +45,18 @@ const StorefrontApp = {
         Api.getCategories(),
         Api.getProducts(),
       ]);
+
+      if (typeof Store !== 'undefined' && Store.pruneOrphanedCartItems) {
+        const pruned = Store.pruneOrphanedCartItems();
+        if (pruned > 0) {
+          if (typeof Toast !== 'undefined') {
+            Toast.info(`Cart updated: ${pruned} discontinued item${pruned > 1 ? 's were' : ' was'} removed.`);
+          }
+          if (typeof CartDrawer !== 'undefined' && CartDrawer.render) {
+            CartDrawer.render();
+          }
+        }
+      }
     } catch (e) {
       console.warn('API catalog fetch failed, using available store state:', e);
     }
@@ -249,10 +261,12 @@ const StorefrontApp = {
       const c2 = p.color2 || '#22d3ee';
       const reviews = p.reviewsCount ?? p.review_count ?? p.reviews ?? 0;
       const rating = p.rating ?? p.average_rating ?? 5.0;
-      const imgUrl = p.imageUrl || p.image_url;
+      const rawImg = p.imageUrl || p.image_url;
+      const imgUrl = typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg;
+      const fallbackArt = `<div class="device-art" style="--c1: ${c1}; --c2: ${c2}"></div>`;
       const mediaHtml = imgUrl
-        ? `<img src="${imgUrl}" alt="${p.name}" class="product-photo" style="width: 100%; height: 100%; object-fit: contain; padding: 12px;">`
-        : `<div class="device-art" style="--c1: ${c1}; --c2: ${c2}"></div>`;
+        ? `<img src="${imgUrl}" alt="${p.name}" class="product-photo" style="width: 100%; height: 100%; object-fit: contain; padding: 12px;" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
+        : fallbackArt;
 
       return `
         <article class="product-card">
@@ -293,6 +307,9 @@ const StorefrontApp = {
       Store.addToCart(variantId, 1);
       const found = Store.getVariantById(variantId);
       Toast.success(`Added ${found.product.name} to cart.`);
+      if (typeof Api !== 'undefined' && Api.addToCart) {
+        Api.addToCart(variantId, 1).catch(() => {});
+      }
     } catch (err) {
       Toast.error(err.message);
     }
@@ -593,7 +610,7 @@ const AdminActionModals = {
       let uploadedUrl = null;
       const cleanFilename = 'prod_' + Math.random().toString(36).substring(2, 10) + '.webp';
 
-      // 1. Attempt direct frontend upload to Supabase Storage
+      // 1. Direct frontend upload to Supabase Storage
       try {
         if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
           const byteString = atob(compressed.dataUrl.split(',')[1]);
@@ -618,17 +635,24 @@ const AdminActionModals = {
 
           if (directRes.ok) {
             uploadedUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/public/products/${cleanFilename}`;
+          } else {
+            const errBody = await directRes.text().catch(() => '');
+            console.warn(`Direct Supabase upload failed (${directRes.status}):`, errBody);
           }
         }
       } catch (directErr) {
-        console.warn('Direct Supabase upload notice, using backend adapter:', directErr);
+        console.warn('Direct upload notice:', directErr);
       }
 
-      // 2. Fallback to API relay (which uploads to Supabase Storage via service key, zero disk writes)
+      // 2. Upload via API relay using backend Supabase Storage adapter with service key
       if (!uploadedUrl) {
-        const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
-        if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
-          uploadedUrl = uploadRes.data.url;
+        try {
+          const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
+          if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+            uploadedUrl = uploadRes.data.url;
+          }
+        } catch (relayErr) {
+          console.warn('API upload relay error:', relayErr);
         }
       }
 
@@ -637,6 +661,7 @@ const AdminActionModals = {
         Toast.success(`Image stored in Supabase CDN (${compKb} KB).`);
       } else {
         if (hiddenUrlInput) hiddenUrlInput.value = compressed.dataUrl;
+        Toast.info(`Image saved as optimized WebP (${compKb} KB).`);
       }
     } catch (err) {
       console.error('Image upload error:', err);
@@ -700,6 +725,193 @@ const AdminActionModals = {
       }
     } catch (err) {
       Toast.error(err.message);
+    }
+  },
+
+  openEditProduct(productId) {
+    const product = Store.getProductById(productId);
+    if (!product) {
+      Toast.error('Product not found in store.');
+      return;
+    }
+
+    const modal = document.getElementById('admin-edit-product-modal');
+    if (!modal) return;
+
+    document.getElementById('admin-edit-prod-id').value = product.id;
+    document.getElementById('admin-edit-prod-name').value = product.name || '';
+    document.getElementById('admin-edit-prod-brand').value = product.brand || '';
+    document.getElementById('admin-edit-prod-desc').value = product.description || '';
+
+    // Category
+    const catSelect = document.getElementById('admin-edit-prod-cat');
+    if (catSelect) {
+      const catVal = product.categoryId || product.category_id || product.category || 'cat_devices';
+      catSelect.value = catVal.startsWith('cat_') ? catVal : `cat_${catVal}`;
+      if (!catSelect.value) catSelect.selectedIndex = 0;
+    }
+
+    // Status
+    const statusSelect = document.getElementById('admin-edit-prod-status');
+    if (statusSelect) {
+      statusSelect.value = product.isActive !== undefined ? (product.isActive ? '1' : '0') : '1';
+    }
+
+    // Image preview
+    const imgUrl = product.imageUrl || product.image_url || '';
+    const hiddenUrlInput = document.getElementById('admin-edit-prod-image-url');
+    const previewThumb = document.getElementById('admin-edit-image-preview-thumb');
+    const previewContainer = document.getElementById('admin-edit-image-preview-container');
+    const statsEl = document.getElementById('admin-edit-image-stats');
+
+    if (hiddenUrlInput) hiddenUrlInput.value = imgUrl;
+    if (imgUrl && previewThumb) {
+      previewThumb.src = imgUrl;
+      if (previewContainer) previewContainer.style.display = 'flex';
+      if (statsEl) statsEl.textContent = 'Current product image';
+    } else {
+      if (previewContainer) previewContainer.style.display = 'none';
+    }
+
+    const fileInput = document.getElementById('admin-edit-prod-image');
+    if (fileInput) fileInput.value = '';
+
+    modal.classList.add('open');
+  },
+
+  closeEditProduct() {
+    const modal = document.getElementById('admin-edit-product-modal');
+    if (modal) modal.classList.remove('open');
+  },
+
+  async handleEditImageSelect(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    const previewContainer = document.getElementById('admin-edit-image-preview-container');
+    const previewThumb = document.getElementById('admin-edit-image-preview-thumb');
+    const statsEl = document.getElementById('admin-edit-image-stats');
+    const hiddenUrlInput = document.getElementById('admin-edit-prod-image-url');
+
+    try {
+      if (statsEl) statsEl.textContent = 'Compressing image...';
+      if (previewContainer) previewContainer.style.display = 'flex';
+
+      const compressor = window.AdminImageCompressor;
+      if (!compressor) throw new Error('Image compressor is not initialized.');
+
+      const compressed = await compressor.compress(file);
+      if (previewThumb) previewThumb.src = compressed.dataUrl;
+
+      const origKb = Math.round(compressed.originalSize / 1024);
+      const compKb = Math.round(compressed.compressedSize / 1024);
+      if (statsEl) {
+        statsEl.innerHTML = `Original: <b>${origKb} KB</b> → Compressed: <b>${compKb} KB</b> <span style="color: var(--cyan);">(-${compressed.savingsPercent}%)</span>`;
+      }
+
+      // Upload via direct Supabase Storage or API
+      let uploadedUrl = null;
+      const cleanFilename = 'prod_' + Math.random().toString(36).substring(2, 10) + '.webp';
+
+      try {
+        if (CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) {
+          const byteString = atob(compressed.dataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: 'image/webp' });
+
+          const directEndpoint = `${CONFIG.SUPABASE_URL}/storage/v1/object/products/${cleanFilename}`;
+          const directRes = await fetch(directEndpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+              'apikey': CONFIG.SUPABASE_ANON_KEY,
+              'Content-Type': 'image/webp',
+              'x-upsert': 'true',
+            },
+            body: blob,
+          });
+
+          if (directRes.ok) {
+            uploadedUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/public/products/${cleanFilename}`;
+          } else {
+            const errBody = await directRes.text().catch(() => '');
+            console.warn(`Direct Supabase edit upload failed (${directRes.status}):`, errBody);
+          }
+        }
+      } catch (directErr) {
+        console.warn('Direct upload notice:', directErr);
+      }
+
+      if (!uploadedUrl) {
+        const uploadRes = await Api.uploadProductImage(compressed.dataUrl);
+        if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+          uploadedUrl = uploadRes.data.url;
+        }
+      }
+
+      if (uploadedUrl) {
+        if (hiddenUrlInput) hiddenUrlInput.value = uploadedUrl;
+        Toast.success(`New image uploaded (${compKb} KB).`);
+      } else {
+        if (hiddenUrlInput) hiddenUrlInput.value = compressed.dataUrl;
+        Toast.info(`Image saved as optimized WebP (${compKb} KB).`);
+      }
+    } catch (err) {
+      console.error('Image upload error:', err);
+      Toast.error('Failed to upload image: ' + err.message);
+    }
+  },
+
+  async submitEditProduct(event) {
+    if (event) event.preventDefault();
+
+    const productId = document.getElementById('admin-edit-prod-id').value;
+    const name = document.getElementById('admin-edit-prod-name').value.trim();
+    const brand = document.getElementById('admin-edit-prod-brand').value.trim();
+    const category = document.getElementById('admin-edit-prod-cat').value;
+    const statusVal = document.getElementById('admin-edit-prod-status').value;
+    const desc = document.getElementById('admin-edit-prod-desc').value.trim();
+    const imageUrl = document.getElementById('admin-edit-prod-image-url').value;
+
+    if (!name || !brand) {
+      Toast.error('Product name and brand are required.');
+      return;
+    }
+
+    try {
+      const payload = {
+        name,
+        brand,
+        category_id: category,
+        description: desc,
+        is_active: statusVal === '1',
+        image_url: imageUrl || null,
+        imageUrl: imageUrl || null,
+      };
+
+      const res = await Api.updateProduct(productId, payload);
+      if (res && res.success) {
+        Store.updateProduct(productId, {
+          ...payload,
+          imageUrl: res.data?.image_url || payload.image_url,
+          image_url: res.data?.image_url || payload.image_url,
+        });
+
+        if (typeof AdminApp !== 'undefined' && typeof AdminApp.renderInventory === 'function') {
+          AdminApp.renderInventory();
+        }
+
+        Toast.success(`Product "${name}" updated successfully.`);
+        this.closeEditProduct();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to update product');
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error updating product');
     }
   },
 

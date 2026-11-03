@@ -52,7 +52,9 @@ const CartDrawer = {
   updateBadge() {
     const badgeEl = document.getElementById('cart-badge-counter');
     if (!badgeEl) return;
-    const items = Store.getState().cart.items;
+    const items = (typeof Store !== 'undefined' && Store.getCartItemsDetailed)
+      ? Store.getCartItemsDetailed()
+      : (Store.getState().cart.items || []);
     const totalQty = items.reduce((acc, it) => acc + it.quantity, 0);
     badgeEl.textContent = totalQty;
     badgeEl.style.display = totalQty > 0 ? 'grid' : 'none';
@@ -164,6 +166,9 @@ const CartDrawer = {
   changeQty(variantId, newQty) {
     try {
       Store.updateCartQuantity(variantId, newQty);
+      if (typeof Api !== 'undefined' && Api.updateCartItem) {
+        Api.updateCartItem(variantId, newQty).catch(() => {});
+      }
     } catch (err) {
       Toast.error(err.message);
     }
@@ -171,6 +176,9 @@ const CartDrawer = {
 
   removeItem(variantId) {
     Store.removeFromCart(variantId);
+    if (typeof Api !== 'undefined' && Api.removeCartItem) {
+      Api.removeCartItem(variantId).catch(() => {});
+    }
     Toast.info('Item removed from cart.');
   },
 

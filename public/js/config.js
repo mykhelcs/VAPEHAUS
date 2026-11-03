@@ -45,9 +45,34 @@ const CONFIG = {
     return base + '/api/v1';
   })(),
   PAYMONGO_PUBLIC_KEY: 'pk_test_Y8qhFjBW4NWiu8A36T74Mix2',
-  SUPABASE_URL: 'https://xpegspccnihndttvhfna.supabase.co',
-  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZWdzcGNjbmlobmR0dHZoZm5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMzg3OTQsImV4cCI6MjEwODkxNDc5NH0.cfGRSxiLKArKi2NSMFIuD41-rjK6NArlF7BWRRcbdxo',
+  SUPABASE_URL: 'https://whjkqzwhhbrnjpgspoyy.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoamtxendoaGJybmpwZ3Nwb3l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2NzM5OTYsImV4cCI6MjEwOTI0OTk5Nn0.IAQuMkT3gS1NiqkkW8kzoz9n0bY2MeF4l-BDMgOz5hw',
 };
+
+/**
+ * Universal media URL resolver:
+ * Ensures Supabase CDN, base64 data URLs, and local fallback paths
+ * always resolve reliably across any host, port, or environment.
+ */
+function resolveMediaUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  if (url.includes('/uploads/products/')) {
+    const idx = url.indexOf('/uploads/products/');
+    const origin = window.location.origin;
+    const baseDir = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL)
+      ? CONFIG.API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+      : '';
+    return origin + baseDir + url.substring(idx);
+  }
+  if (url.startsWith('/')) {
+    return window.location.origin + url;
+  }
+  return url;
+}
+window.resolveMediaUrl = resolveMediaUrl;
 
 // Freeze configuration to guarantee determinism
 Object.freeze(CONFIG);

@@ -263,9 +263,25 @@ final class PdoProductRepository implements ProductRepositoryInterface
         $stmt->execute();
         $rows = $stmt->fetchAll();
 
+        if (empty($rows)) {
+            return [];
+        }
+
+        // Bulk load all variants in a single query to eliminate N+1 problem
+        $productIds = array_column($rows, 'id');
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $vStmt = $this->pdo->prepare("SELECT * FROM product_variants WHERE product_id IN ({$placeholders}) AND is_active = 1 ORDER BY price ASC");
+        $vStmt->execute($productIds);
+        $variantRows = $vStmt->fetchAll();
+
+        $variantsByProduct = [];
+        foreach ($variantRows as $vr) {
+            $variantsByProduct[$vr['product_id']][] = $this->mapRowToVariant($vr);
+        }
+
         $products = [];
         foreach ($rows as $row) {
-            $variants = $this->loadVariantsForProduct($row['id']);
+            $variants = $variantsByProduct[$row['id']] ?? [];
             $products[] = $this->mapRowToProduct($row, $variants);
         }
 

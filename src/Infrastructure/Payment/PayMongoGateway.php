@@ -118,6 +118,8 @@ class PayMongoGateway
             CURLOPT_HTTPHEADER     => $headers,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
         ]);
 
         if (!empty($body)) {
@@ -126,15 +128,27 @@ class PayMongoGateway
 
         $raw    = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
         curl_close($ch);
 
-        if ($raw === false || $status >= 500) {
+        if ($raw === false) {
             throw new ValidationException(
-                "PayMongo API call failed (HTTP {$status})."
+                "PayMongo connection failed: " . ($curlErr !== '' ? $curlErr : "HTTP {$status}")
             );
         }
 
         $decoded = json_decode((string) $raw, true);
-        return is_array($decoded) ? $decoded : [];
+        $decoded = is_array($decoded) ? $decoded : [];
+
+        if (isset($decoded['errors']) && is_array($decoded['errors']) && count($decoded['errors']) > 0) {
+            $errDetail = $decoded['errors'][0]['detail'] ?? $decoded['errors'][0]['message'] ?? 'Payment gateway error';
+            throw new ValidationException("PayMongo: {$errDetail}");
+        }
+
+        if ($status >= 400) {
+            throw new ValidationException("PayMongo API returned HTTP {$status}.");
+        }
+
+        return $decoded;
     }
 }

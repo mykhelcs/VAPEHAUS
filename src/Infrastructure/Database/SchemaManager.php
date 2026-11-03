@@ -25,8 +25,16 @@ final class SchemaManager
 
         $markerFile = dirname(__DIR__, 3) . '/database/.schema_initialized';
         if (file_exists($markerFile) && !$force) {
-            self::$initialized = true;
-            return;
+            try {
+                $countStmt = $pdo->query('SELECT COUNT(*) FROM products');
+                $count = $countStmt !== false ? (int) $countStmt->fetchColumn() : 0;
+                if ($count > 0) {
+                    self::$initialized = true;
+                    return;
+                }
+            } catch (\Throwable $e) {
+                // Table might not exist yet, proceed with initialization
+            }
         }
 
         $schema = new self($pdo);
@@ -328,6 +336,17 @@ final class SchemaManager
                 expires_at {$ts},
                 created_at {$ts},
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );",
+
+            // 19. OTP Verifications (Registration & Password Reset)
+            "CREATE TABLE IF NOT EXISTS otp_verifications (
+                id VARCHAR(64) PRIMARY KEY,
+                email VARCHAR(191) NOT NULL,
+                otp_code VARCHAR(10) NOT NULL,
+                purpose VARCHAR(30) NOT NULL DEFAULT 'registration',
+                is_consumed INTEGER NOT NULL DEFAULT 0,
+                expires_at {$ts},
+                created_at {$ts}
             );"
         ];
 
@@ -375,6 +394,7 @@ final class SchemaManager
             'CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug)',
             'CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id)',
             'CREATE INDEX IF NOT EXISTS idx_variants_sku ON product_variants(sku)',
+            'CREATE INDEX IF NOT EXISTS idx_otp_email_purpose ON otp_verifications(email, purpose)',
         ];
         foreach ($indexes as $idxSql) {
             try {
@@ -556,6 +576,17 @@ final class SchemaManager
                 ]);
             }
         }
+
+        // 5. Seed Sample Products if catalog is empty
+        try {
+            $checkProd = $this->pdo->query('SELECT COUNT(*) FROM products');
+            $prodCount = $checkProd !== false ? (int) $checkProd->fetchColumn() : 0;
+            if ($prodCount === 0) {
+                $this->seedSampleProducts();
+            }
+        } catch (\Throwable $e) {
+            // Silently skip if table is not accessible
+        }
     } // end doSeedDefaults
 
     /**
@@ -614,8 +645,8 @@ final class SchemaManager
             $check = $this->pdo->prepare('SELECT COUNT(*) FROM products WHERE id = :id');
             $check->execute([':id' => $p['id']]);
             if ($check->fetchColumn() == 0) {
-                $ins = $this->pdo->prepare('INSERT INTO products (id, category_id, name, slug, brand, description, average_rating, review_count, is_active, created_at)
-                    VALUES (:id, :cid, :name, :slug, :brand, :desc, :rating, :revs, 1, :created)');
+                $ins = $this->pdo->prepare('INSERT INTO products (id, category_id, name, slug, brand, description, image_url, average_rating, review_count, is_active, created_at)
+                    VALUES (:id, :cid, :name, :slug, :brand, :desc, :img, :rating, :revs, 1, :created)');
                 $ins->execute([
                     ':id' => $p['id'],
                     ':cid' => $p['category_id'],
@@ -623,6 +654,7 @@ final class SchemaManager
                     ':slug' => $p['slug'],
                     ':brand' => $p['brand'],
                     ':desc' => $p['description'],
+                    ':img' => $p['image_url'] ?? null,
                     ':rating' => $p['rating'] ?? 0.0,
                     ':revs' => $p['reviews'] ?? 0,
                     ':created' => $now,

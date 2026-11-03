@@ -16,11 +16,15 @@ use Vapehaus\Execution\Admin\AdminGetDashboardExecution;
 use Vapehaus\Execution\Admin\AdminListCustomersExecution;
 use Vapehaus\Execution\Admin\AdminListOrdersExecution;
 use Vapehaus\Execution\Admin\AdminUpdateOrderStatusExecution;
+use Vapehaus\Execution\Admin\AdminUpdateProductExecution;
 use Vapehaus\Execution\Admin\AdminUpdateStockExecution;
 use Vapehaus\Execution\Auth\AuthenticateUserExecution;
 use Vapehaus\Execution\Auth\GetProfileExecution;
 use Vapehaus\Execution\Auth\LogoutUserExecution;
 use Vapehaus\Execution\Auth\RegisterUserExecution;
+use Vapehaus\Execution\Auth\ResetPasswordExecution;
+use Vapehaus\Execution\Auth\SendOtpExecution;
+use Vapehaus\Execution\Auth\VerifyOtpExecution;
 use Vapehaus\Execution\Cart\AddToCartExecution;
 use Vapehaus\Execution\Cart\ClearCartExecution;
 use Vapehaus\Execution\Cart\GetCartExecution;
@@ -45,6 +49,7 @@ use Vapehaus\Execution\Wishlist\WishlistExecution;
 use Vapehaus\Infrastructure\Database\DatabaseConnection;
 use Vapehaus\Infrastructure\Database\SchemaManager;
 use Vapehaus\Infrastructure\Environment\Env;
+use Vapehaus\Infrastructure\Mailer\SmtpMailer;
 use Vapehaus\Infrastructure\Notification\PdoNotificationService;
 use Vapehaus\Infrastructure\Payment\PayMongoGateway;
 use Vapehaus\Infrastructure\Storage\SupabaseStorageAdapter;
@@ -55,6 +60,7 @@ use Vapehaus\Infrastructure\Repository\PdoCouponRepository;
 use Vapehaus\Infrastructure\Repository\PdoInventoryAuditRepository;
 use Vapehaus\Infrastructure\Repository\PdoKycRepository;
 use Vapehaus\Infrastructure\Repository\PdoOrderRepository;
+use Vapehaus\Infrastructure\Repository\PdoOtpRepository;
 use Vapehaus\Infrastructure\Repository\PdoPaymentTransactionRepository;
 use Vapehaus\Infrastructure\Repository\PdoProductRepository;
 use Vapehaus\Infrastructure\Repository\PdoReturnRepository;
@@ -121,6 +127,8 @@ final class App
         $auditRepo = new PdoInventoryAuditRepository($this->pdo);
         $notifService = new PdoNotificationService($this->pdo);
         $sessionRepo = new PdoSessionRepository($this->pdo);
+        $otpRepo = new PdoOtpRepository($this->pdo);
+        $smtpMailer = new SmtpMailer();
 
         $hasher = new PasswordHasher();
         $tokenService = new JwtTokenService();
@@ -133,7 +141,10 @@ final class App
         $authRateLimiter = new RateLimiterMiddleware(5, 60); // 5 attempts per minute (Audit spec)
 
         // Executions
-        $registerExec = new RegisterUserExecution($userRepo, $hasher, $tokenService, 18, $sessionRepo);
+        $sendOtpExec = new SendOtpExecution($otpRepo, $smtpMailer, $userRepo);
+        $verifyOtpExec = new VerifyOtpExecution($otpRepo);
+        $resetPasswordExec = new ResetPasswordExecution($userRepo, $otpRepo, $hasher);
+        $registerExec = new RegisterUserExecution($userRepo, $hasher, $tokenService, 18, $sessionRepo, $otpRepo);
         $authExec = new AuthenticateUserExecution($userRepo, $hasher, $tokenService, $sessionRepo);
         $logoutExec = new LogoutUserExecution($sessionRepo);
         $profileExec = new GetProfileExecution($userRepo);
@@ -182,6 +193,7 @@ final class App
         $checkDbHealthExec = new CheckDatabaseHealthExecution($this->pdo);
         $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
         $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);
+        $adminUpdateProductExec = new AdminUpdateProductExecution($productRepo, $categoryRepo);
         $adminVariantExec = new AdminCreateVariantExecution($productRepo);
         $adminStockExec = new AdminUpdateStockExecution($productRepo);
         $adminOrdersExec = new AdminListOrdersExecution($orderRepo);
@@ -189,7 +201,15 @@ final class App
         $adminCustomersExec = new AdminListCustomersExecution($userRepo);
 
         // Controllers
-        $authController = new AuthController($registerExec, $authExec, $profileExec, $logoutExec);
+        $authController = new AuthController(
+            $registerExec,
+            $authExec,
+            $profileExec,
+            $logoutExec,
+            $sendOtpExec,
+            $verifyOtpExec,
+            $resetPasswordExec
+        );
         $userController = new UserController($profileExec, $userOrdersExec, $orderDetailExec, $cancelOrderExec);
         $catalogController = new CatalogController($listCategoriesExec, $listProductsExec, $productDetailExec, $facetsExec);
         $cartController = new CartController($getCartExec, $addToCartExec, $updateCartItemExec, $removeFromCartExec, $clearCartExec);
@@ -215,6 +235,7 @@ final class App
             $shipOrderExec,
             $auditRepo,
             $adminDeleteProductExec,
+            $adminUpdateProductExec,
             $uploadImageExec,
             $checkDbHealthExec
         );
@@ -224,6 +245,10 @@ final class App
         $this->router->post('/api/v1/auth/login', fn (Request $r) => $authController->login($r), [$authRateLimiter]);
         $this->router->post('/api/v1/auth/logout', fn (Request $r) => $authController->logout($r));
         $this->router->get('/api/v1/auth/me', fn (Request $r) => $authController->me($r), [$authRequired]);
+        $this->router->post('/api/v1/auth/send-otp', fn (Request $r) => $authController->sendOtp($r), [$authRateLimiter]);
+        $this->router->post('/api/v1/auth/verify-otp', fn (Request $r) => $authController->verifyOtp($r), [$authRateLimiter]);
+        $this->router->post('/api/v1/auth/forgot-password', fn (Request $r) => $authController->forgotPassword($r), [$authRateLimiter]);
+        $this->router->post('/api/v1/auth/reset-password', fn (Request $r) => $authController->resetPassword($r), [$authRateLimiter]);
 
         // 2. User & Orders Endpoints (Compatible with both /orders and /user/orders)
         $this->router->get('/api/v1/user/profile', fn (Request $r) => $userController->getProfile($r), [$authRequired]);
@@ -283,9 +308,9 @@ final class App
         $this->router->get('/api/v1/admin/dashboard', fn (Request $r) => $adminController->getDashboard($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/categories', fn (Request $r) => $adminController->createCategory($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/products', fn (Request $r) => $adminController->createProduct($r), [$authRequired, $adminOnly]);
+        $this->router->patch('/api/v1/admin/products/{id}', fn (Request $r, array $p) => $adminController->updateProduct($r, $p), [$authRequired, $adminOnly]);
         $this->router->delete('/api/v1/admin/products/{id}', fn (Request $r, array $p) => $adminController->deleteProduct($r, $p), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/upload-image', fn (Request $r) => $adminController->uploadImage($r), [$authRequired, $adminOnly]);
-        $this->router->get('/api/v1/admin/db-health', fn (Request $r) => $adminController->getDatabaseHealth($r), [$authRequired, $adminOnly]);
         $this->router->get('/api/v1/health', fn (Request $r) => $adminController->getDatabaseHealth($r));
         $this->router->post('/api/v1/admin/products/{id}/variants', fn (Request $r, array $p) => $adminController->createVariant($r, $p), [$authRequired, $adminOnly]);
         

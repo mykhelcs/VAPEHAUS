@@ -1,11 +1,15 @@
 /**
- * VAPEHAUS AUTHENTICATION MODAL COMPONENT (WITH RBAC REDIRECTION)
- * Handles Sign In, Register, 18+ statutory age checks, and role-based redirects
+ * VAPEHAUS AUTHENTICATION MODAL COMPONENT (WITH RBAC REDIRECTION & 18+ OTP)
+ * Handles Sign In, 2-Step OTP Account Registration, Password Reset, and 18+ Statutory Checks
  */
 
 const AuthModal = {
   overlayEl: null,
   activeTab: 'login',
+  regOtpSent: false,
+  regPendingData: null,
+  forgotOtpSent: false,
+  forgotEmail: '',
 
   init() {
     this.overlayEl = document.getElementById('auth-modal');
@@ -39,6 +43,8 @@ const AuthModal = {
 
   openRegister() {
     this.activeTab = 'register';
+    this.regOtpSent = false;
+    this.regPendingData = null;
     this.render();
     if (this.overlayEl) {
       this.overlayEl.classList.add('open');
@@ -53,6 +59,14 @@ const AuthModal = {
 
   setTab(tab) {
     this.activeTab = tab;
+    if (tab === 'register') {
+      this.regOtpSent = false;
+      this.regPendingData = null;
+    }
+    if (tab === 'forgot') {
+      this.forgotOtpSent = false;
+      this.forgotEmail = '';
+    }
     this.render();
   },
 
@@ -67,8 +81,6 @@ const AuthModal = {
       toggleBtn.textContent = '👁️';
     }
   },
-
-
 
   calculateAge(birthDateStr) {
     if (!birthDateStr) return 0;
@@ -104,6 +116,8 @@ const AuthModal = {
     if (!bodyEl) return;
 
     const isLogin = this.activeTab === 'login';
+    const isRegister = this.activeTab === 'register';
+    const isForgot = this.activeTab === 'forgot';
 
     bodyEl.innerHTML = `
       <div style="padding: 30px;">
@@ -111,12 +125,17 @@ const AuthModal = {
           <button class="auth-tab-btn ${isLogin ? 'active' : ''}" onclick="AuthModal.setTab('login')">
             Sign In
           </button>
-          <button class="auth-tab-btn ${!isLogin ? 'active' : ''}" onclick="AuthModal.setTab('register')">
+          <button class="auth-tab-btn ${isRegister ? 'active' : ''}" onclick="AuthModal.setTab('register')">
             Create Account
           </button>
+          ${isForgot ? `
+            <button class="auth-tab-btn active" style="cursor: default;">
+              Reset Password
+            </button>
+          ` : ''}
         </div>
 
-        ${isLogin ? this.renderLoginForm() : this.renderRegisterForm()}
+        ${isLogin ? this.renderLoginForm() : isForgot ? this.renderForgotForm() : this.renderRegisterForm()}
       </div>
     `;
   },
@@ -132,7 +151,7 @@ const AuthModal = {
         <div class="input-group">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label class="input-label" style="margin: 0;">Password <span class="required">*</span></label>
-            <a href="#" style="font-size: 0.78rem; color: var(--accent2);" onclick="Toast.info('Password reset instructions will be sent to your email.')">Forgot password?</a>
+            <a href="#" style="font-size: 0.78rem; color: var(--accent2);" onclick="event.preventDefault(); AuthModal.setTab('forgot')">Forgot password?</a>
           </div>
           <div style="position: relative;">
             <input type="password" id="auth-login-password" class="input-control" placeholder="Enter your password" required style="padding-right: 42px;">
@@ -160,8 +179,36 @@ const AuthModal = {
   },
 
   renderRegisterForm() {
+    if (this.regOtpSent && this.regPendingData) {
+      return `
+        <form onsubmit="AuthModal.handleRegisterOtpSubmit(event)">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">📩</div>
+            <h3>Enter Verification Code</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+              A 6-digit code has been dispatched to <b>${this.regPendingData.email}</b>.
+            </p>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" style="text-align: center;">6-Digit OTP Code <span class="required">*</span></label>
+            <input type="text" id="reg-otp-code" class="input-control" placeholder="123456" maxlength="6" style="text-align: center; font-size: 1.4rem; letter-spacing: 6px; font-weight: 700;" required autofocus>
+          </div>
+
+          <button type="submit" class="btn btn-lg btn-cyan btn-block" style="margin-bottom: 12px;">
+            Verify & Create 18+ Account
+          </button>
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-top: 14px;">
+            <a href="#" style="color: var(--text-muted);" onclick="event.preventDefault(); AuthModal.regOtpSent = false; AuthModal.render();">← Back to Details</a>
+            <a href="#" style="color: var(--accent2);" onclick="event.preventDefault(); AuthModal.resendRegOtp();">Resend Code</a>
+          </div>
+        </form>
+      `;
+    }
+
     return `
-      <form onsubmit="AuthModal.handleRegisterSubmit(event)">
+      <form onsubmit="AuthModal.handleRegisterInitialSubmit(event)">
         <div class="form-grid-2">
           <div class="input-group">
             <label class="input-label">First Name <span class="required">*</span></label>
@@ -214,12 +261,72 @@ const AuthModal = {
         </label>
 
         <button type="submit" class="btn btn-lg btn-cyan btn-block" style="margin-bottom: 16px;">
-          Create 18+ Verified Account
+          Send Verification Code →
         </button>
 
         <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted);">
           Already have an account? 
           <a href="#" style="color: var(--accent2); font-weight: 600;" onclick="AuthModal.setTab('login')">Sign in here</a>
+        </div>
+      </form>
+    `;
+  },
+
+  renderForgotForm() {
+    if (this.forgotOtpSent) {
+      return `
+        <form onsubmit="AuthModal.handleResetPasswordSubmit(event)">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 2rem; margin-bottom: 8px;">🔑</div>
+            <h3>Set New Password</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+              Enter the OTP sent to <b>${this.forgotEmail}</b> along with your new password.
+            </p>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">6-Digit Reset Code <span class="required">*</span></label>
+            <input type="text" id="reset-otp-code" class="input-control" placeholder="123456" maxlength="6" style="text-align: center; font-size: 1.3rem; letter-spacing: 5px; font-weight: 700;" required autofocus>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">New Password <span class="required">*</span></label>
+            <input type="password" id="reset-new-pass" class="input-control" placeholder="Min. 8 characters" required>
+          </div>
+
+          <button type="submit" class="btn btn-lg btn-cyan btn-block" style="margin-bottom: 12px;">
+            Update Password & Sign In
+          </button>
+
+          <div style="text-align: center; font-size: 0.85rem; margin-top: 14px;">
+            <a href="#" style="color: var(--text-muted);" onclick="event.preventDefault(); AuthModal.setTab('login')">← Back to Sign In</a>
+          </div>
+        </form>
+      `;
+    }
+
+    return `
+      <form onsubmit="AuthModal.handleForgotPasswordSubmit(event)">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 2rem; margin-bottom: 8px;">🔒</div>
+          <h3>Reset Your Password</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+            Enter your registered email address and we'll dispatch a 6-digit recovery OTP code.
+          </p>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Registered Email <span class="required">*</span></label>
+          <input type="email" id="forgot-email" class="input-control" placeholder="you@domain.ph" required>
+        </div>
+
+        <button type="submit" class="btn btn-lg btn-block" style="margin-bottom: 16px;">
+          Send Password Reset Code →
+        </button>
+
+        <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+          Remembered your password? 
+          <a href="#" style="color: var(--accent2); font-weight: 600;" onclick="AuthModal.setTab('login')">Sign in</a>
         </div>
       </form>
     `;
@@ -237,14 +344,13 @@ const AuthModal = {
       const result = await Api.login(email, password);
 
       if (!result.success) {
-        Toast.error(result.error.message || 'Invalid email or password.');
+        Toast.error(result.error?.message || 'Invalid email or password.');
         return;
       }
 
       const user = result.data.user;
       this.close();
 
-      // ROLE-BASED ACCESS CONTROL (RBAC) REDIRECTION:
       if (user.role === 'admin') {
         Toast.success(`Admin authorized: ${user.firstName}. Redirecting to Admin Dashboard…`);
         setTimeout(() => { window.location.href = 'admin.html'; }, 600);
@@ -262,7 +368,7 @@ const AuthModal = {
     }
   },
 
-  async handleRegisterSubmit(e) {
+  async handleRegisterInitialSubmit(e) {
     e.preventDefault();
     const firstName = document.getElementById('reg-fname').value.trim();
     const lastName = document.getElementById('reg-lname').value.trim();
@@ -278,16 +384,69 @@ const AuthModal = {
       return;
     }
 
+    const age = this.calculateAge(birthDate);
+    if (age < 18) {
+      Toast.error('You must be at least 18 years old to create an account (RA 11900).');
+      return;
+    }
+
     const submitBtn = e.target.querySelector('[type=submit]');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating account…'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending OTP code…'; }
 
     try {
-      const result = await Api.register({
+      this.regPendingData = {
         firstName, lastName, email, phone, birthDate, password, isAgeAttested,
-      });
+      };
 
+      const res = await Api.sendOtp(email, 'registration');
+      if (res && res.success) {
+        this.regOtpSent = true;
+        Toast.success(res.data?.debug_otp ? `OTP Sent! Dev Code: ${res.data.debug_otp}` : 'Verification code sent to your email.');
+        this.render();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to dispatch OTP email.');
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error requesting verification code.');
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send Verification Code →'; }
+    }
+  },
+
+  async resendRegOtp() {
+    if (!this.regPendingData?.email) return;
+    try {
+      const res = await Api.sendOtp(this.regPendingData.email, 'registration');
+      if (res && res.success) {
+        Toast.success(res.data?.debug_otp ? `New Code: ${res.data.debug_otp}` : 'New OTP code dispatched.');
+      } else {
+        Toast.error(res?.error?.message || 'Failed to resend code.');
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
+
+  async handleRegisterOtpSubmit(e) {
+    e.preventDefault();
+    const otp = document.getElementById('reg-otp-code').value.trim();
+    if (!otp || otp.length < 4) {
+      Toast.error('Please enter the verification code.');
+      return;
+    }
+
+    const submitBtn = e.target.querySelector('[type=submit]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Verifying…'; }
+
+    try {
+      const payload = {
+        ...this.regPendingData,
+        otp,
+      };
+
+      const result = await Api.register(payload);
       if (!result.success) {
-        Toast.error(result.error.message || 'Registration failed.');
+        Toast.error(result.error?.message || 'Registration failed.');
         return;
       }
 
@@ -297,7 +456,58 @@ const AuthModal = {
     } catch (err) {
       Toast.error(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create 18+ Verified Account'; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Verify & Create 18+ Account'; }
+    }
+  },
+
+  async handleForgotPasswordSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    const submitBtn = e.target.querySelector('[type=submit]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending recovery code…'; }
+
+    try {
+      const res = await Api.forgotPassword(email);
+      if (res && res.success) {
+        this.forgotEmail = email;
+        this.forgotOtpSent = true;
+        Toast.success(res.data?.debug_otp ? `Reset Code: ${res.data.debug_otp}` : 'Password reset code dispatched to your email.');
+        this.render();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to send password reset code.');
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Send Password Reset Code →'; }
+    }
+  },
+
+  async handleResetPasswordSubmit(e) {
+    e.preventDefault();
+    const otp = document.getElementById('reset-otp-code').value.trim();
+    const newPassword = document.getElementById('reset-new-pass').value;
+
+    if (newPassword.length < 6) {
+      Toast.error('Password must be at least 6 characters.');
+      return;
+    }
+
+    const submitBtn = e.target.querySelector('[type=submit]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Resetting…'; }
+
+    try {
+      const res = await Api.resetPassword(this.forgotEmail, otp, newPassword);
+      if (res && res.success) {
+        Toast.success('Password updated successfully! Please sign in with your new credentials.');
+        this.setTab('login');
+      } else {
+        Toast.error(res?.error?.message || 'Failed to reset password. Check code.');
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Password & Sign In'; }
     }
   },
 

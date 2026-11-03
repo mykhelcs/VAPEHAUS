@@ -79,10 +79,12 @@ const QuickViewModal = {
 
     const isOutOfStock = v.stock <= 0;
     const isLowStock = v.stock > 0 && v.stock < 10;
-    const imgUrl = p.imageUrl || p.image_url;
+    const rawImg = p.imageUrl || p.image_url;
+    const imgUrl = typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg;
+    const fallbackArt = `<div class="device-art" style="--c1: ${p.color1 || '#8b5cf6'}; --c2: ${p.color2 || '#22d3ee'}"></div>`;
     const mediaHtml = imgUrl
-      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 100%; height: 100%; max-height: 280px; object-fit: contain; border-radius: var(--r-md);">`
-      : `<div class="device-art" style="--c1: ${p.color1 || '#8b5cf6'}; --c2: ${p.color2 || '#22d3ee'}"></div>`;
+      ? `<img src="${imgUrl}" alt="${p.name}" style="width: 100%; height: 100%; max-height: 280px; object-fit: contain; border-radius: var(--r-md);" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
+      : fallbackArt;
 
     contentEl.innerHTML = `
       <div class="pdp-grid">
@@ -159,6 +161,9 @@ const QuickViewModal = {
     if (!this.selectedVariant) return;
     try {
       Store.addToCart(this.selectedVariant.id, this.quantity);
+      if (typeof Api !== 'undefined' && Api.addToCart) {
+        Api.addToCart(this.selectedVariant.id, this.quantity).catch(() => {});
+      }
       Toast.success(`Added ${this.quantity}x ${this.currentProduct.name} to cart.`);
       this.close();
       if (typeof CartDrawer !== 'undefined') {
@@ -173,6 +178,9 @@ const QuickViewModal = {
     if (!this.selectedVariant) return;
     try {
       Store.addToCart(this.selectedVariant.id, this.quantity);
+      if (typeof Api !== 'undefined' && Api.addToCart) {
+        Api.addToCart(this.selectedVariant.id, this.quantity).catch(() => {});
+      }
       this.close();
       if (typeof CheckoutModal !== 'undefined') {
         CheckoutModal.open();

@@ -20,6 +20,13 @@ class VapehausApiClient {
   constructor(baseUrl = CONFIG.API_BASE_URL) {
     this.baseUrl = baseUrl;
     this._token = localStorage.getItem(CONFIG.STORAGE_KEYS.SESSION_TOKEN) || null;
+
+    let cartToken = localStorage.getItem('VAPEHAUS_CART_TOKEN');
+    if (!cartToken) {
+      cartToken = 'sess_' + Math.random().toString(36).substring(2, 12) + '_' + Date.now().toString(36);
+      localStorage.setItem('VAPEHAUS_CART_TOKEN', cartToken);
+    }
+    this._cartToken = cartToken;
   }
 
   // ── Private Transport ──────────────────────────────────────────────────
@@ -28,11 +35,17 @@ class VapehausApiClient {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Session-Token': this._cartToken,
+      'X-Cart-Token': this._cartToken,
     };
     if (this._token) {
       headers['Authorization'] = `Bearer ${this._token}`;
     }
     return headers;
+  }
+
+  getCartSessionToken() {
+    return this._cartToken;
   }
 
   /**
@@ -184,6 +197,42 @@ class VapehausApiClient {
   }
 
   /**
+   * POST /api/v1/auth/send-otp
+   */
+  async sendOtp(email, purpose = 'registration') {
+    return this._request('POST', '/auth/send-otp', { email, purpose }, async () => {
+      return this._wrapSuccess({ sent: true, message: 'Local OTP mode enabled' });
+    });
+  }
+
+  /**
+   * POST /api/v1/auth/verify-otp
+   */
+  async verifyOtp(email, otp, purpose = 'registration') {
+    return this._request('POST', '/auth/verify-otp', { email, otp, purpose }, async () => {
+      return this._wrapSuccess({ verified: true });
+    });
+  }
+
+  /**
+   * POST /api/v1/auth/forgot-password
+   */
+  async forgotPassword(email) {
+    return this._request('POST', '/auth/forgot-password', { email }, async () => {
+      return this._wrapSuccess({ sent: true });
+    });
+  }
+
+  /**
+   * POST /api/v1/auth/reset-password
+   */
+  async resetPassword(email, otp, newPassword) {
+    return this._request('POST', '/auth/reset-password', { email, otp, new_password: newPassword }, async () => {
+      return this._wrapSuccess({ reset: true });
+    });
+  }
+
+  /**
    * POST /api/v1/auth/logout
    */
   async logout() {
@@ -310,6 +359,13 @@ class VapehausApiClient {
     });
   }
 
+  async clearCart() {
+    return this._request('DELETE', '/cart', null, async () => {
+      Store.clearCart();
+      return this._cartEnvelope();
+    });
+  }
+
   _cartEnvelope() {
     return this._wrapSuccess({
       items: Store.getCartItemsDetailed(),
@@ -331,6 +387,9 @@ class VapehausApiClient {
   }
 
   async checkout(orderPayload) {
+    if (!orderPayload.session_token && this._cartToken) {
+      orderPayload.session_token = this._cartToken;
+    }
     return this._request('POST', '/checkout', orderPayload, async () => {
       const order = Store.placeOrder(orderPayload);
       return this._wrapSuccess(order, {}, 201);
@@ -448,6 +507,13 @@ class VapehausApiClient {
     return this._request('POST', '/admin/products', productPayload, async () => {
       const product = Store.addProduct(productPayload);
       return this._wrapSuccess(product, {}, 201);
+    });
+  }
+
+  async updateProduct(productId, productData) {
+    return this._request('PATCH', `/admin/products/${productId}`, productData, async () => {
+      Store.updateProduct(productId, productData);
+      return this._wrapSuccess(productData);
     });
   }
 
