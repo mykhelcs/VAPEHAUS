@@ -1,0 +1,9 @@
+{
+    "email": "direct@example.com",
+    "otp": "654321",
+    "purpose": "registration",
+    "expires_at": 1793853931,
+    "consumed": true,
+    "created_at": 1793853331,
+    "consumed_at": 1793853331
+}

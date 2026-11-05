@@ -226,8 +226,8 @@ class VapehausApiClient {
   /**
    * POST /api/v1/auth/reset-password
    */
-  async resetPassword(email, otp, newPassword) {
-    return this._request('POST', '/auth/reset-password', { email, otp, new_password: newPassword }, async () => {
+  async resetPassword(email, otp, newPassword, otpToken = '') {
+    return this._request('POST', '/auth/reset-password', { email, otp, new_password: newPassword, otp_token: otpToken }, async () => {
       return this._wrapSuccess({ reset: true });
     });
   }
@@ -312,6 +312,12 @@ class VapehausApiClient {
     });
   }
 
+  async getProductReviews(productId) {
+    return this._request('GET', `/products/${productId}/reviews`, null, async () =>
+      this._wrapSuccess([])
+    );
+  }
+
   // ── CART ──────────────────────────────────────────────────────────────
 
   async getCart() {
@@ -376,6 +382,33 @@ class VapehausApiClient {
 
   // ── CHECKOUT & ORDERS ─────────────────────────────────────────────────
 
+  async createCheckoutSession(orderId, paymentMethods = ['gcash', 'paymaya', 'card']) {
+    const origin = window.location.origin;
+    const path = window.location.pathname;
+    const successUrl = `${origin}${path}?order_id=${encodeURIComponent(orderId)}&status=paid`;
+    const cancelUrl = `${origin}${path}?order_id=${encodeURIComponent(orderId)}&status=cancelled`;
+
+    return this._request(
+      'POST',
+      '/payments/checkout-session',
+      {
+        order_id: orderId,
+        payment_methods: paymentMethods,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      },
+      async () => {
+        return this._wrapSuccess({
+          order_id: orderId,
+          order_number: 'VH-MOCK',
+          checkout_session_id: 'cs_mock_' + Math.random().toString(36).substring(2, 10),
+          checkout_url: successUrl,
+          amount_centavos: 0,
+        });
+      }
+    );
+  }
+
   async createPaymentIntent(orderId) {
     return this._request('POST', '/payments/intent', { order_id: orderId }, async () => {
       return this._wrapSuccess({
@@ -390,10 +423,15 @@ class VapehausApiClient {
     if (!orderPayload.session_token && this._cartToken) {
       orderPayload.session_token = this._cartToken;
     }
-    return this._request('POST', '/checkout', orderPayload, async () => {
+    const result = await this._request('POST', '/checkout', orderPayload, async () => {
       const order = Store.placeOrder(orderPayload);
       return this._wrapSuccess(order, {}, 201);
     });
+
+    if (result.success && result.data && typeof Store !== 'undefined' && Store.upsertOrder) {
+      Store.upsertOrder(result.data);
+    }
+    return result;
   }
 
   async getOrders(filters = {}) {
@@ -410,7 +448,7 @@ class VapehausApiClient {
       if (filters.search) {
         const q = filters.search.toLowerCase();
         orders = orders.filter(
-          (o) => o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q)
+          (o) => (o.orderNumber || o.order_number || '').toLowerCase().includes(q) || (o.customerName || '').toLowerCase().includes(q)
         );
       }
       return this._wrapSuccess(orders, { total: orders.length });
@@ -423,18 +461,28 @@ class VapehausApiClient {
   }
 
   async getOrderDetail(id) {
-    return this._request('GET', `/orders/${id}`, null, async () => {
+    const result = await this._request('GET', `/orders/${id}`, null, async () => {
       const order = Store.getOrderById(id);
       if (!order) return this._wrapError('NOT_FOUND', `Order "${id}" not found.`);
       return this._wrapSuccess(order);
     });
+
+    if (result.success && result.data && typeof Store !== 'undefined' && Store.upsertOrder) {
+      Store.upsertOrder(result.data);
+    }
+    return result;
   }
 
   async cancelOrder(orderId) {
-    return this._request('POST', `/orders/${orderId}/cancel`, null, async () => {
+    const result = await this._request('POST', `/orders/${orderId}/cancel`, null, async () => {
       const order = Store.updateOrderStatus(orderId, OrderStatus.CANCELLED);
       return this._wrapSuccess(order);
     });
+
+    if (result.success && result.data && typeof Store !== 'undefined' && Store.upsertOrder) {
+      Store.upsertOrder(result.data);
+    }
+    return result;
   }
 
   // ── ADMIN: ORDER FULFILLMENT ──────────────────────────────────────────

@@ -41,10 +41,14 @@ const StorefrontApp = {
 
   async loadCatalog() {
     try {
-      await Promise.all([
+      const tasks = [
         Api.getCategories(),
         Api.getProducts(),
-      ]);
+      ];
+      if (typeof Store !== 'undefined' && Store.isAuthenticated && Store.isAuthenticated() && Api.getOrders) {
+        tasks.push(Api.getOrders());
+      }
+      await Promise.all(tasks);
 
       if (typeof Store !== 'undefined' && Store.pruneOrphanedCartItems) {
         const pruned = Store.pruneOrphanedCartItems();
@@ -269,10 +273,11 @@ const StorefrontApp = {
         : fallbackArt;
 
       return `
-        <article class="product-card">
-          <div class="product-thumb" onclick="QuickViewModal.open('${p.id}')">
+        <article class="product-card" onclick="QuickViewModal.open('${p.id}')" style="cursor: pointer;">
+          <div class="product-thumb">
             ${p.badge ? `<span class="badge badge-cyan product-badge">${p.badge}</span>` : ''}
             ${mediaHtml}
+            <div class="product-quickview-pill">🔍 View Details</div>
             <div class="product-stock-tag ${totalStock < 10 ? 'low' : ''}">
               ${hasStock ? (totalStock < 10 ? `Only ${totalStock} left` : 'In Stock') : 'Out of Stock'}
             </div>
@@ -280,7 +285,7 @@ const StorefrontApp = {
 
           <div class="product-body">
             <div class="product-brand">${p.brand}</div>
-            <h3 class="product-title" onclick="QuickViewModal.open('${p.id}')">${p.name}</h3>
+            <h3 class="product-title">${p.name}</h3>
             
             <div class="product-rating">
               ★★★★★ <span>(${reviews})</span>
@@ -291,9 +296,14 @@ const StorefrontApp = {
                 ${Money.format(mainVariant.price)}
                 ${mainVariant.originalPrice ? `<s>${Money.format(mainVariant.originalPrice)}</s>` : ''}
               </div>
-              <button class="btn-add-cart" onclick="StorefrontApp.quickAddToCart('${mainVariant.id}', event)" title="Add to Cart" ${!hasStock ? 'disabled' : ''}>
-                +
-              </button>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="btn btn-secondary btn-sm btn-view-details" onclick="event.stopPropagation(); QuickViewModal.open('${p.id}')" title="View Product Details">
+                  View Details
+                </button>
+                <button class="btn-add-cart" onclick="StorefrontApp.quickAddToCart('${mainVariant.id}', event)" title="Add to Cart" ${!hasStock ? 'disabled' : ''}>
+                  +
+                </button>
+              </div>
             </div>
           </div>
         </article>
@@ -315,7 +325,7 @@ const StorefrontApp = {
     }
   },
 
-  openAccountModal() {
+  async openAccountModal() {
     const modal = document.getElementById('account-modal');
     if (!modal) return;
     const user = Store.getCurrentUser();
@@ -324,26 +334,53 @@ const StorefrontApp = {
     } else {
       this.renderAccountContent();
       modal.classList.add('open');
+      if (typeof Api !== 'undefined' && Api.getOrders) {
+        try {
+          await Api.getOrders();
+          if (modal.classList.contains('open')) {
+            this.renderAccountContent();
+          }
+        } catch (err) {
+          console.warn('Could not sync account orders:', err);
+        }
+      }
     }
+  },
+
+  closeAccountModal() {
+    const modal = document.getElementById('account-modal');
+    if (modal) modal.classList.remove('open');
   },
 
   setupAccountModal() {
     const modal = document.getElementById('account-modal');
+    if (!modal) return;
+
     const trigger = document.getElementById('btn-account-toggle');
     const closeBtn = document.getElementById('btn-close-account');
-    if (!modal || !trigger) return;
 
-    trigger.addEventListener('click', () => {
-      this.openAccountModal();
-    });
+    if (trigger) {
+      trigger.addEventListener('click', () => {
+        this.openAccountModal();
+      });
+    }
 
     if (closeBtn) {
-      closeBtn.addEventListener('click', () => modal.classList.remove('open'));
+      closeBtn.addEventListener('click', () => this.closeAccountModal());
     }
 
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.classList.remove('open');
+      if (e.target === modal) this.closeAccountModal();
     });
+
+    if (typeof document !== 'undefined' && document.addEventListener && !this._accountEscBound) {
+      this._accountEscBound = true;
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('open')) {
+          this.closeAccountModal();
+        }
+      });
+    }
   },
 
   renderAccountContent() {
@@ -399,24 +436,39 @@ const StorefrontApp = {
 
         <!-- Footer Sign Out -->
         <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
-          <button class="btn btn-secondary btn-sm" onclick="AuthModal.openLogin(); document.getElementById('account-modal').classList.remove('open');">
+          <button class="btn btn-secondary btn-sm" onclick="StorefrontApp.closeAccountModal(); AuthModal.openLogin();">
             Switch Account
           </button>
-          <button class="btn btn-danger btn-sm" onclick="AuthModal.logout(); document.getElementById('account-modal').classList.remove('open');">
-            🚪 Sign Out
-          </button>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary btn-sm" onclick="StorefrontApp.closeAccountModal();">
+              Close
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="StorefrontApp.closeAccountModal(); AuthModal.logout();">
+              🚪 Sign Out
+            </button>
+          </div>
         </div>
       </div>
     `;
   },
 
-  showAccountTab(tab) {
+  async showAccountTab(tab) {
     const container = document.getElementById('account-tab-content');
     if (!container) return;
 
     if (tab === 'orders') {
-      const orders = Store.getOrders();
-      container.innerHTML = this.renderAccountOrdersHtml(orders);
+      container.innerHTML = this.renderAccountOrdersHtml(Store.getOrders());
+      if (typeof Api !== 'undefined' && Api.getOrders) {
+        try {
+          await Api.getOrders();
+          const refreshedOrders = Store.getOrders();
+          container.innerHTML = this.renderAccountOrdersHtml(refreshedOrders);
+          const tabBtn = document.getElementById('tab-btn-orders');
+          if (tabBtn) tabBtn.innerHTML = `📦 My Orders (${refreshedOrders.length})`;
+        } catch {
+          // Keep current store orders deterministically
+        }
+      }
     } else if (tab === 'kyc') {
       const user = Store.getCurrentUser();
       const isVerified = user ? !!user.isAgeVerified : false;

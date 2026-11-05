@@ -50,10 +50,20 @@ final class Request
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
 
         $headers = [];
+        if (function_exists('getallheaders')) {
+            foreach ((array) getallheaders() as $name => $val) {
+                $headers[strtolower(str_replace('_', '-', (string) $name))] = (string) $val;
+            }
+        }
         foreach ($_SERVER as $key => $value) {
             if (str_starts_with($key, 'HTTP_')) {
                 $headerName = strtolower(str_replace('_', '-', substr($key, 5)));
                 $headers[$headerName] = (string) $value;
+            } elseif (str_starts_with($key, 'REDIRECT_HTTP_')) {
+                $headerName = strtolower(str_replace('_', '-', substr($key, 14)));
+                if (!isset($headers[$headerName])) {
+                    $headers[$headerName] = (string) $value;
+                }
             } elseif (in_array($key, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)) {
                 $headers[strtolower(str_replace('_', '-', $key))] = (string) $value;
             }

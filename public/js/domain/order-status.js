@@ -49,13 +49,13 @@ const OrderStatus = {
 
     switch (from) {
       case this.PENDING:
-        return to === this.PAID || to === this.CANCELLED;
+        return [this.PAID, this.PROCESSING, this.SHIPPED, this.CANCELLED].includes(to);
       case this.PAID:
-        return to === this.PROCESSING || to === this.CANCELLED;
+        return [this.PROCESSING, this.SHIPPED, this.CANCELLED].includes(to);
       case this.PROCESSING:
-        return to === this.SHIPPED || to === this.CANCELLED;
+        return [this.SHIPPED, this.DELIVERED, this.CANCELLED].includes(to);
       case this.SHIPPED:
-        return to === this.DELIVERED;
+        return [this.DELIVERED, this.CANCELLED].includes(to);
       case this.DELIVERED:
       case this.CANCELLED:
         return false;
@@ -71,7 +71,7 @@ const OrderStatus = {
    */
   canCancel(status) {
     const s = String(status || '').trim().toLowerCase();
-    return s === this.PENDING || s === this.PAID;
+    return [this.PENDING, this.PAID, this.PROCESSING, this.SHIPPED].includes(s);
   },
 
   /**

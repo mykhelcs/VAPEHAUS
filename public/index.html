@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/theme.css">
-  <link rel="stylesheet" href="css/storefront.css">
+  <link rel="stylesheet" href="css/theme.css?v=2.0.2">
+  <link rel="stylesheet" href="css/storefront.css?v=2.0.2">
 </head>
 <body>
 
@@ -260,8 +260,8 @@
 
   <!-- Product Detail / Quick View Modal -->
   <div class="modal-overlay" id="pdp-modal">
-    <div class="modal-card">
-      <button class="modal-close-btn">✕</button>
+    <div class="modal-card" style="max-width: 780px;">
+      <button class="modal-close-btn" id="btn-close-pdp" aria-label="Close Product Details">✕</button>
       <div id="pdp-modal-content"></div>
     </div>
   </div>
@@ -285,7 +285,7 @@
   <!-- Customer Account & KYC Modal -->
   <div class="modal-overlay" id="account-modal">
     <div class="modal-card">
-      <button class="modal-close-btn" id="btn-close-account">✕</button>
+      <button class="modal-close-btn" id="btn-close-account" aria-label="Close Profile">✕</button>
       <div id="account-modal-content"></div>
     </div>
   </div>
@@ -303,22 +303,22 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <!-- Core Scripts -->
-  <script src="js/config.js"></script>
-  <script src="js/domain/order-status.js"></script>
-  <script src="js/domain/money.js"></script>
-  <script src="js/store/state.js"></script>
-  <script src="js/api/client.js"></script>
+  <script src="js/config.js?v=2.0.2"></script>
+  <script src="js/domain/order-status.js?v=2.0.2"></script>
+  <script src="js/domain/money.js?v=2.0.2"></script>
+  <script src="js/store/state.js?v=2.0.2"></script>
+  <script src="js/api/client.js?v=2.0.2"></script>
 
   <!-- Presentation Components -->
-  <script src="js/components/notifications.js"></script>
-  <script src="js/components/auth-modal.js"></script>
-  <script src="js/components/age-gate.js"></script>
-  <script src="js/components/quick-view.js"></script>
-  <script src="js/components/cart-drawer.js"></script>
-  <script src="js/components/checkout.js"></script>
-  <script src="js/components/order-tracker.js"></script>
+  <script src="js/components/notifications.js?v=2.0.2"></script>
+  <script src="js/components/auth-modal.js?v=2.0.2"></script>
+  <script src="js/components/age-gate.js?v=2.0.2"></script>
+  <script src="js/components/quick-view.js?v=2.0.2"></script>
+  <script src="js/components/cart-drawer.js?v=2.0.2"></script>
+  <script src="js/components/checkout.js?v=2.0.2"></script>
+  <script src="js/components/order-tracker.js?v=2.0.2"></script>
 
   <!-- Page Controller -->
-  <script src="js/storefront.js"></script>
+  <script src="js/storefront.js?v=2.0.2"></script>
 </body>
 </html>

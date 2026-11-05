@@ -55,6 +55,7 @@ const CheckoutModal = {
       return;
     }
 
+    if (!this.formData.customerEmail) this.prefillFromSession();
     this.currentStep = 1;
     this.render();
     if (this.overlayEl) {
@@ -383,22 +384,49 @@ const CheckoutModal = {
       }
 
       const order = result.data;
+      if (typeof Store !== 'undefined' && Store.upsertOrder) {
+        Store.upsertOrder(order);
+      }
 
       // Option 1: Cash on Delivery (COD) - Clear cart immediately
       if (this.formData.paymentMethod === 'cod') {
         if (typeof Store !== 'undefined') Store.clearCart();
         if (typeof Api !== 'undefined' && Api.clearCart) Api.clearCart().catch(() => {});
-        Toast.success(`Order #${order.orderNumber} placed! Pay upon delivery. 🛵`);
+        Toast.success(`Order #${order.orderNumber || order.order_number || order.id} placed! Pay upon delivery. 🛵`);
         this.close();
         if (typeof CartDrawer !== 'undefined') CartDrawer.render();
         if (typeof OrderTrackerModal !== 'undefined') {
-          OrderTrackerModal.showOrder(order.id);
+          OrderTrackerModal.showOrder(order.id, order);
         }
         return;
       }
 
-      // Option 2: PayMongo E-Wallets & Card (Render in-page overlay tab)
-      await this._renderPayMongoOverlayTab(order);
+      // Option 2: PayMongo Hosted Checkout Session (GCash, Maya, Card)
+      if (submitBtn) {
+        submitBtn.textContent = 'Redirecting to PayMongo… 🔐';
+      }
+
+      const pmMethod = this.formData.paymentMethod === 'maya' ? 'paymaya' : (this.formData.paymentMethod === 'card' ? 'card' : 'gcash');
+      let sessionRes = null;
+      try {
+        sessionRes = await Api.createCheckoutSession(order.id, [pmMethod, 'gcash', 'paymaya', 'card']);
+      } catch (sessErr) {
+        sessionRes = { success: false, error: { message: sessErr.message } };
+      }
+
+      if (sessionRes && sessionRes.success && sessionRes.data && sessionRes.data.checkout_url) {
+        if (typeof Store !== 'undefined') Store.clearCart();
+        if (typeof Api !== 'undefined' && Api.clearCart) Api.clearCart().catch(() => {});
+        Toast.info('Redirecting to PayMongo secure payment page… 🔐');
+        this.close();
+        window.location.href = sessionRes.data.checkout_url;
+        return;
+      }
+
+      // Fallback if PayMongo API returned an error (e.g. offline dev / unconfigured test keys)
+      const fallbackMsg = sessionRes?.error?.message || 'Could not generate PayMongo Checkout Session.';
+      const bodyEl = document.getElementById('checkout-modal-body');
+      this._renderGatewayFallbackNotice(bodyEl, order, fallbackMsg);
     } catch (err) {
       Toast.error(err.message || 'An unexpected error occurred during checkout.');
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
@@ -408,8 +436,8 @@ const CheckoutModal = {
   simulatePayment(orderId, orderNumber, total) {
     if (typeof Store !== 'undefined') {
       Store.clearCart();
-      if (Store.updateOrderStatus) {
-        Store.updateOrderStatus(orderId, 'processing', { paymentStatus: 'paid' });
+      if (Store.upsertOrder) {
+        Store.upsertOrder({ id: orderId, orderNumber, status: 'processing', paymentStatus: 'paid' });
       }
     }
     if (typeof Api !== 'undefined' && Api.clearCart) Api.clearCart().catch(() => {});

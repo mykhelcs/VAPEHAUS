@@ -69,6 +69,90 @@ class PayMongoGateway
     }
 
     /**
+     * Create a PayMongo Hosted Checkout Session.
+     * Official docs: https://developers.paymongo.com/reference/create-a-checkout-session
+     * Returns checkout_session_id and hosted checkout_url.
+     *
+     * @param int                 $amountCentavos
+     * @param string              $description
+     * @param array<int, array{name: string, amount: int, currency: string, quantity: int, images?: array<string>}> $lineItems
+     * @param array<string,mixed> $metadata
+     * @param string              $successUrl
+     * @param string              $cancelUrl
+     * @param array<int, string>  $paymentMethods   e.g. ['gcash', 'paymaya', 'card']
+     * @return array{checkout_session_id: string, checkout_url: string}
+     */
+    public function createCheckoutSession(
+        int $amountCentavos,
+        string $description,
+        array $lineItems,
+        array $metadata,
+        string $successUrl,
+        string $cancelUrl,
+        array $paymentMethods = ['gcash', 'paymaya', 'card']
+    ): array {
+        if ($amountCentavos <= 0) {
+            throw new ValidationException('Payment amount must be greater than zero.');
+        }
+
+        // If no explicit line items provided, create a single item representing the total order
+        if (empty($lineItems)) {
+            $lineItems = [
+                [
+                    'currency' => 'PHP',
+                    'amount'   => $amountCentavos,
+                    'name'     => $description,
+                    'quantity' => 1,
+                ],
+            ];
+        }
+
+        $payload = [
+            'data' => [
+                'attributes' => [
+                    'billing'              => null,
+                    'send_email_receipt'   => false,
+                    'show_description'     => true,
+                    'show_line_items'      => true,
+                    'payment_method_types' => $paymentMethods,
+                    'line_items'           => $lineItems,
+                    'description'          => $description,
+                    'success_url'          => $successUrl,
+                    'cancel_url'           => $cancelUrl,
+                    'metadata'             => $metadata,
+                ],
+            ],
+        ];
+
+        $response = $this->request('POST', '/checkout_sessions', $payload);
+        $id = $response['data']['id'] ?? null;
+        $checkoutUrl = $response['data']['attributes']['checkout_url'] ?? null;
+
+        if ($id === null || $checkoutUrl === null) {
+            throw new ValidationException('PayMongo returned an invalid Checkout Session response.');
+        }
+
+        return [
+            'checkout_session_id' => (string) $id,
+            'checkout_url'        => (string) $checkoutUrl,
+        ];
+    }
+
+    /**
+     * Retrieve an existing PayMongo Checkout Session.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCheckoutSession(string $sessionId): array
+    {
+        if (trim($sessionId) === '') {
+            throw new ValidationException('Checkout session ID is required.');
+        }
+
+        return $this->request('GET', '/checkout_sessions/' . urlencode($sessionId));
+    }
+
+    /**
      * Verify a PayMongo webhook signature.
      * Header format: "t=<timestamp>,te=<hmac_sha256>,li=<hmac_sha256>"
      */
@@ -89,14 +173,19 @@ class PayMongoGateway
             }
         }
 
-        if (!isset($parts['t'], $parts['te'])) {
+        if (!isset($parts['t'])) {
             return false;
         }
 
-        $message  = $parts['t'] . '.' . $rawPayload;
+        $signature = $parts['te'] ?? $parts['li'] ?? null;
+        if ($signature === null || trim($signature) === '') {
+            return false;
+        }
+
+        $message = $parts['t'] . '.' . $rawPayload;
         $expected = hash_hmac('sha256', $message, $webhookSecret);
 
-        return hash_equals($expected, $parts['te']);
+        return hash_equals($expected, $signature);
     }
 
     /**

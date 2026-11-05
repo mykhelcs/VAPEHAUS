@@ -37,18 +37,63 @@ final class PaymentExecution
     }
 
     /**
+     * Handle PayMongo Webhook with strict HMAC verification and idempotency.
+     * Supports both official PayMongo nested events (checkout_session.payment.paid, payment.paid)
+     * and standardized direct webhooks.
+     *
      * @param array<string, mixed> $payload
      * @return array<string, mixed>
      */
     public function handleWebhook(array $payload, ?string $signatureHeader = null): array
     {
-        $eventType = $payload['event'] ?? $payload['type'] ?? 'payment.succeeded';
-        $data = $payload['data'] ?? $payload;
+        // 1. Extract Event Type
+        $eventType = $payload['data']['attributes']['type']
+            ?? $payload['event']
+            ?? $payload['type']
+            ?? 'payment.paid';
 
-        $orderId = $data['order_id'] ?? $data['metadata']['order_id'] ?? null;
-        $reference = $data['transaction_reference'] ?? $data['id'] ?? ('tx_' . bin2hex(random_bytes(8)));
-        $amount = (float) ($data['amount'] ?? 0);
-        $gateway = $payload['gateway'] ?? 'paymongo';
+        // 2. Extract Data Attributes (handling PayMongo official nested structure)
+        $orderId = null;
+        $reference = null;
+        $amount = 0.0;
+        $gateway = 'paymongo';
+
+        // Check if official PayMongo event envelope
+        if (isset($payload['data']['attributes']['data']['attributes'])) {
+            $inner = $payload['data']['attributes']['data']['attributes'];
+            $metadata = $inner['metadata'] ?? [];
+
+            $orderId = $metadata['order_id'] ?? $metadata['order_number'] ?? null;
+
+            // Extract payment ID from session's payments array, or session ID, or event ID
+            if (!empty($inner['payments'][0]['id'])) {
+                $reference = (string) $inner['payments'][0]['id'];
+                $centavos = $inner['payments'][0]['attributes']['amount'] ?? 0;
+                $amount = $centavos > 0 ? ((float) $centavos / 100.0) : 0.0;
+            } elseif (!empty($payload['data']['attributes']['data']['id'])) {
+                $reference = (string) $payload['data']['attributes']['data']['id'];
+            }
+
+            if ($amount <= 0.0 && !empty($inner['amount'])) {
+                $amount = ((float) $inner['amount']) / 100.0;
+            }
+        }
+
+        // Direct / flat payload fallback
+        $data = $payload['data'] ?? $payload;
+        if ($orderId === null) {
+            $orderId = $data['order_id'] ?? $data['metadata']['order_id'] ?? null;
+        }
+        if ($reference === null) {
+            $reference = $data['transaction_reference'] ?? $data['id'] ?? $payload['data']['id'] ?? ('tx_' . bin2hex(random_bytes(8)));
+        }
+        if ($amount <= 0.0) {
+            $rawAmt = (float) ($data['amount'] ?? 0);
+            $amount = $rawAmt;
+        }
+        if (isset($payload['gateway'])) {
+            $gateway = (string) $payload['gateway'];
+        }
 
         if ($orderId === null) {
             throw new ValidationException('Webhook payload missing target order_id.');
@@ -63,30 +108,32 @@ final class PaymentExecution
             throw new EntityNotFoundException('Order', (string) $orderId);
         }
 
-        // Idempotency: If transaction was already processed, return existing
+        // Idempotency check: If transaction reference was already recorded, return existing
         $existingTx = $this->paymentRepo->findByReference($reference);
         if ($existingTx !== null) {
             return [
                 'status' => 'already_processed',
+                'event' => $eventType,
                 'transaction' => $existingTx->toArray(),
                 'order' => $order->toArray(),
             ];
         }
 
+        $finalAmount = $amount > 0 ? $amount : $order->getTotal()->toFloat();
         $txId = 'ptx_' . bin2hex(random_bytes(6));
         $transaction = new PaymentTransaction(
             $txId,
             $order->getId(),
             $gateway,
             $reference,
-            Money::fromFloat($amount > 0 ? $amount : $order->getTotal()->toFloat()),
+            Money::fromFloat($finalAmount),
             PaymentTransaction::STATUS_SUCCEEDED,
             $payload
         );
 
         $this->paymentRepo->save($transaction);
 
-        // Update order status to paid
+        // Transition order status to paid (only from pending state)
         if ($order->getStatus()->getValue() === 'pending') {
             $order->markAsPaid();
             $this->orderRepo->save($order);
@@ -94,6 +141,7 @@ final class PaymentExecution
 
         return [
             'status' => 'success',
+            'event' => $eventType,
             'transaction' => $transaction->toArray(),
             'order' => $order->toArray(),
         ];

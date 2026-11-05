@@ -21,6 +21,10 @@ final class GetUserOrdersExecution
      */
     public function execute(string $userId, int $page = 1, int $limit = 20): array
     {
+        if (trim($userId) === '') {
+            return [];
+        }
+
         $page = max(1, $page);
         $limit = min(100, max(1, $limit));
         $offset = ($page - 1) * $limit;

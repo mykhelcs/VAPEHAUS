@@ -193,6 +193,7 @@ final class Order
             $this->shippedAt = (new DateTimeImmutable())->format('Y-m-d H:i:s');
         } elseif ($targetStatus === OrderStatus::DELIVERED) {
             $this->deliveredAt = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+            $this->paymentStatus = 'paid';
         }
     }
 

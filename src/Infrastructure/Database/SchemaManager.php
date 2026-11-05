@@ -17,23 +17,21 @@ final class SchemaManager
         $this->pdo = $pdo;
     }
 
+    public static function reset(): void
+    {
+        self::$initialized = false;
+    }
+
     public static function ensureInitialized(PDO $pdo, bool $force = false): void
     {
-        if (self::$initialized && !$force) {
-            return;
-        }
-
-        $markerFile = dirname(__DIR__, 3) . '/database/.schema_initialized';
-        if (file_exists($markerFile) && !$force) {
+        if (!$force) {
             try {
                 $countStmt = $pdo->query('SELECT COUNT(*) FROM products');
-                $count = $countStmt !== false ? (int) $countStmt->fetchColumn() : 0;
-                if ($count > 0) {
-                    self::$initialized = true;
+                if ($countStmt !== false) {
                     return;
                 }
-            } catch (\Throwable $e) {
-                // Table might not exist yet, proceed with initialization
+            } catch (\Throwable) {
+                // Table does not exist in this PDO connection, proceed with initialization
             }
         }
 
@@ -41,6 +39,7 @@ final class SchemaManager
         $schema->createTables();
         $schema->seedDefaults();
 
+        $markerFile = dirname(__DIR__, 3) . '/database/.schema_initialized';
         $dbDir = dirname($markerFile);
         if (!is_dir($dbDir)) {
             @mkdir($dbDir, 0777, true);

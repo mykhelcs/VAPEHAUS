@@ -1,0 +1,9 @@
+{
+    "email": "realcustomer@gmail.com",
+    "otp": "948903",
+    "purpose": "registration",
+    "expires_at": 1793845983,
+    "consumed": true,
+    "created_at": 1793845383,
+    "consumed_at": 1793845392
+}

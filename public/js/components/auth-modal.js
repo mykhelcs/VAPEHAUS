@@ -357,6 +357,12 @@ const AuthModal = {
       } else {
         Toast.success(`Welcome back, ${user.firstName}! Signed in as Customer.`);
         this.updateHeaderAuthStatus();
+        if (typeof CheckoutModal !== 'undefined' && CheckoutModal.prefillFromSession) {
+          CheckoutModal.prefillFromSession();
+        }
+        if (typeof Api !== 'undefined' && Api.getOrders) {
+          Api.getOrders().catch(() => {});
+        }
         if (window.location.pathname.includes('admin.html')) {
           window.location.href = 'index.html';
         }
@@ -401,7 +407,9 @@ const AuthModal = {
       const res = await Api.sendOtp(email, 'registration');
       if (res && res.success) {
         this.regOtpSent = true;
-        Toast.success(res.data?.debug_otp ? `OTP Sent! Dev Code: ${res.data.debug_otp}` : 'Verification code sent to your email.');
+        // Store the HMAC token for stateless OTP verification
+        this.regOtpToken = res.data?.otp_token || null;
+        Toast.success('Verification code has been dispatched to your email.');
         this.render();
       } else {
         Toast.error(res?.error?.message || 'Failed to dispatch OTP email.');
@@ -418,7 +426,8 @@ const AuthModal = {
     try {
       const res = await Api.sendOtp(this.regPendingData.email, 'registration');
       if (res && res.success) {
-        Toast.success(res.data?.debug_otp ? `New Code: ${res.data.debug_otp}` : 'New OTP code dispatched.');
+        this.regOtpToken = res.data?.otp_token || null;
+        Toast.success('New verification code has been dispatched to your email.');
       } else {
         Toast.error(res?.error?.message || 'Failed to resend code.');
       }
@@ -442,6 +451,7 @@ const AuthModal = {
       const payload = {
         ...this.regPendingData,
         otp,
+        otp_token: this.regOtpToken || '',
       };
 
       const result = await Api.register(payload);
@@ -453,6 +463,12 @@ const AuthModal = {
       Toast.success(`Account registered! Welcome to VAPEHAUS, ${result.data.user.firstName}.`);
       this.close();
       this.updateHeaderAuthStatus();
+      if (typeof CheckoutModal !== 'undefined' && CheckoutModal.prefillFromSession) {
+        CheckoutModal.prefillFromSession();
+      }
+      if (typeof Api !== 'undefined' && Api.getOrders) {
+        Api.getOrders().catch(() => {});
+      }
     } catch (err) {
       Toast.error(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
@@ -471,7 +487,8 @@ const AuthModal = {
       if (res && res.success) {
         this.forgotEmail = email;
         this.forgotOtpSent = true;
-        Toast.success(res.data?.debug_otp ? `Reset Code: ${res.data.debug_otp}` : 'Password reset code dispatched to your email.');
+        this.forgotOtpToken = res.data?.otp_token || null;
+        Toast.success('Password reset code has been dispatched to your email.');
         this.render();
       } else {
         Toast.error(res?.error?.message || 'Failed to send password reset code.');
@@ -497,7 +514,7 @@ const AuthModal = {
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Resetting…'; }
 
     try {
-      const res = await Api.resetPassword(this.forgotEmail, otp, newPassword);
+      const res = await Api.resetPassword(this.forgotEmail, otp, newPassword, this.forgotOtpToken || '');
       if (res && res.success) {
         Toast.success('Password updated successfully! Please sign in with your new credentials.');
         this.setTab('login');
@@ -512,6 +529,9 @@ const AuthModal = {
   },
 
   logout() {
+    if (typeof Api !== 'undefined' && Api.logout) {
+      Api.logout().catch(() => {});
+    }
     Store.logout();
     Toast.info('Signed out.');
     this.updateHeaderAuthStatus();

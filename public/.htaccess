@@ -13,6 +13,10 @@
     RewriteEngine On
     RewriteBase /
 
+    # Preserve Authorization header across mod_rewrite for PHP-FPM / FastCGI / Apache
+    RewriteCond %{HTTP:Authorization} ^(.*)
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
     # Serve existing files and directories directly
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d

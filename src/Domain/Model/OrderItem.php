@@ -68,7 +68,17 @@ final class OrderItem
         return $this->snapshottedName;
     }
 
+    public function getProductName(): string
+    {
+        return $this->snapshottedName;
+    }
+
     public function getSnapshottedSku(): string
+    {
+        return $this->snapshottedSku;
+    }
+
+    public function getSku(): string
     {
         return $this->snapshottedSku;
     }
@@ -78,12 +88,27 @@ final class OrderItem
         return $this->snapshottedFlavor;
     }
 
+    public function getFlavor(): string
+    {
+        return $this->snapshottedFlavor;
+    }
+
     public function getSnapshottedNicotine(): string
     {
         return $this->snapshottedNicotine;
     }
 
+    public function getNicotine(): string
+    {
+        return $this->snapshottedNicotine;
+    }
+
     public function getUnitPrice(): Money
+    {
+        return $this->unitPrice;
+    }
+
+    public function getPrice(): Money
     {
         return $this->unitPrice;
     }

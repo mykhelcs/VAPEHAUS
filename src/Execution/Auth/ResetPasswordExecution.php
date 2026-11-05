@@ -9,6 +9,7 @@ use Vapehaus\Domain\Exception\ValidationException;
 use Vapehaus\Domain\Repository\OtpRepositoryInterface;
 use Vapehaus\Domain\Repository\UserRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Email;
+use Vapehaus\Infrastructure\Repository\HmacOtpRepository;
 use Vapehaus\Infrastructure\Security\PasswordHasherInterface;
 
 final class ResetPasswordExecution
@@ -35,6 +36,8 @@ final class ResetPasswordExecution
     {
         $rawEmail = strtolower(trim((string) ($data['email'] ?? '')));
         $otp = trim((string) ($data['otp'] ?? $data['code'] ?? ''));
+        $otpToken = trim((string) ($data['otp_token'] ?? ''));
+        $otpProof = trim((string) ($data['otp_proof'] ?? ''));
         $newPassword = (string) ($data['password'] ?? $data['new_password'] ?? '');
 
         if ($rawEmail === '') {
@@ -52,9 +55,23 @@ final class ResetPasswordExecution
 
         // Verify OTP: either passed directly with the request, or verified recently
         $verified = false;
+
+        // 1. If an OTP code was provided directly, verify it
         if ($otp !== '') {
+            if ($this->otpRepository instanceof HmacOtpRepository && $otpToken !== '') {
+                $this->otpRepository->setProofToken($otpToken);
+            }
             $verified = $this->otpRepository->verifyAndConsumeOtp($email->getValue(), $otp, 'password_reset');
-        } else {
+        }
+        // 2. Or if a proof token was provided
+        elseif ($otpProof !== '') {
+            if ($this->otpRepository instanceof HmacOtpRepository) {
+                $this->otpRepository->setProofToken($otpProof);
+            }
+            $verified = $this->otpRepository->isOtpVerified($email->getValue(), 'password_reset');
+        }
+        // 3. Fallback to check if already verified recently
+        else {
             $verified = $this->otpRepository->isOtpVerified($email->getValue(), 'password_reset');
         }
 

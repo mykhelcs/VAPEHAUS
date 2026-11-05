@@ -7,17 +7,31 @@ require_once __DIR__ . '/../src/bootstrap.php';
 use Vapehaus\Tests\ApiIntegrationTest;
 use Vapehaus\Tests\DomainTest;
 use Vapehaus\Tests\ExecutionTest;
+use Vapehaus\Tests\Integration\Api\AdminOrdersFulfillmentTest;
+use Vapehaus\Tests\Integration\Api\AuthApiTest;
+use Vapehaus\Tests\Integration\Api\CodOrderAndTrackingTest;
+use Vapehaus\Tests\Integration\Api\PayMongoCheckoutWebhookTest;
 use Vapehaus\Tests\TestCase;
 use Vapehaus\Tests\Unit\Execution\AdminDeleteProductExecutionTest;
+use Vapehaus\Tests\Unit\Execution\CreateCheckoutSessionExecutionTest;
 use Vapehaus\Tests\Unit\Execution\DatabaseHealthExecutionTest;
 use Vapehaus\Tests\Unit\Execution\Order\PlaceOrderExecutionTest;
+use Vapehaus\Tests\Unit\HmacOtpRepositoryTest;
+use Vapehaus\Tests\Unit\PayMongoGatewayTest;
 
 $testClasses = [
     DomainTest::class,
     ExecutionTest::class,
+    HmacOtpRepositoryTest::class,
     AdminDeleteProductExecutionTest::class,
     DatabaseHealthExecutionTest::class,
     PlaceOrderExecutionTest::class,
+    CreateCheckoutSessionExecutionTest::class,
+    PayMongoGatewayTest::class,
+    PayMongoCheckoutWebhookTest::class,
+    AuthApiTest::class,
+    CodOrderAndTrackingTest::class,
+    AdminOrdersFulfillmentTest::class,
     ApiIntegrationTest::class,
 ];
 

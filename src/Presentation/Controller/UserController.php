@@ -53,8 +53,10 @@ final class UserController
      */
     public function getOrderDetail(Request $request, array $params): Response
     {
-        $userId = (string) $request->getAttribute('userId');
-        $order = $this->orderDetailExecution->execute($params['id'], $userId, false);
+        $rawUserId = $request->getAttribute('userId');
+        $userId = ($rawUserId !== null && $rawUserId !== '') ? (string) $rawUserId : null;
+        $isAdmin = ($request->getAttribute('userRole') === 'admin');
+        $order = $this->orderDetailExecution->execute($params['id'], $userId, $isAdmin);
         return ApiResponse::success($order);
     }
 

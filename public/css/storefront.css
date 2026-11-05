@@ -684,6 +684,37 @@ nav.main-nav a.active::after {
   left: 12px;
 }
 
+.product-quickview-pill {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: rgba(17, 17, 26, 0.9);
+  border: 1px solid var(--accent2);
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 2;
+}
+
+.product-card:hover .product-quickview-pill {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.btn-view-details {
+  font-size: 0.76rem;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
 .product-stock-tag {
   position: absolute;
   bottom: 10px;

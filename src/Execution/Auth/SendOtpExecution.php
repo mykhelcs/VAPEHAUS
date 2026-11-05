@@ -9,6 +9,7 @@ use Vapehaus\Domain\Repository\OtpRepositoryInterface;
 use Vapehaus\Domain\Repository\UserRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Email;
 use Vapehaus\Infrastructure\Mailer\SmtpMailer;
+use Vapehaus\Infrastructure\Repository\HmacOtpRepository;
 
 final class SendOtpExecution
 {
@@ -97,6 +98,11 @@ HTML;
             'message' => 'OTP has been dispatched to your email.',
             'expires_in' => 600,
         ];
+
+        // Include the HMAC token so the client can send it back for stateless verification
+        if ($this->otpRepository instanceof HmacOtpRepository) {
+            $result['otp_token'] = $this->otpRepository->getLastToken();
+        }
 
         if ($isLocalOrDebug) {
             $result['debug_otp'] = $otp;

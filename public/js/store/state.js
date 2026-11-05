@@ -193,6 +193,7 @@ class VapehausStore {
 
   logout() {
     this.state.currentUser = null;
+    this.state.orders = [];
     this.save();
   }
 
@@ -242,6 +243,28 @@ class VapehausStore {
   setOrders(orders) {
     this.state.orders = Array.isArray(orders) ? orders : [];
     this.save();
+  }
+
+  upsertOrder(order) {
+    if (!order || !order.id) return null;
+    const normalized = {
+      ...order,
+      orderNumber: order.orderNumber || order.order_number || order.id,
+      createdAt: order.createdAt || order.created_at || new Date().toISOString().replace('T', ' ').substring(0, 19),
+    };
+    const idx = this.state.orders.findIndex(
+      (o) =>
+        String(o.id) === String(normalized.id) ||
+        (normalized.orderNumber &&
+          (o.orderNumber === normalized.orderNumber || o.order_number === normalized.orderNumber))
+    );
+    if (idx >= 0) {
+      this.state.orders[idx] = { ...this.state.orders[idx], ...normalized };
+    } else {
+      this.state.orders.unshift(normalized);
+    }
+    this.save();
+    return normalized;
   }
 
   setCoupons(coupons) {
@@ -295,7 +318,13 @@ class VapehausStore {
   }
 
   getOrderById(id) {
-    return this.state.orders.find((o) => o.id === id || o.orderNumber === id || o.order_number === id);
+    if (id === undefined || id === null) return undefined;
+    const targetId = String(id).trim().toLowerCase();
+    return this.state.orders.find((o) => {
+      const oid = String(o.id ?? '').toLowerCase();
+      const onum = String(o.orderNumber || o.order_number || '').toLowerCase();
+      return oid === targetId || onum === targetId;
+    });
   }
 
   getCartItemsDetailed() {

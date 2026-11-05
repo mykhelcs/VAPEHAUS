@@ -31,8 +31,14 @@ final class GetOrderDetailExecution
             throw new EntityNotFoundException('Order', $orderId);
         }
 
-        // Authorization check: User can only view their own orders unless admin
-        if (!$isAdmin && $userId !== null && $order->getUserId() !== $userId) {
+        // Authorization check: User can only view their own orders unless admin or guest order tracking
+        $normalizedUserId = ($userId !== null && trim($userId) !== '') ? trim($userId) : null;
+        if (
+            !$isAdmin
+            && $normalizedUserId !== null
+            && $order->getUserId() !== $normalizedUserId
+            && !str_starts_with($order->getUserId(), 'usr_guest_')
+        ) {
             throw new AuthenticationException('You are not authorized to view this order.');
         }
 

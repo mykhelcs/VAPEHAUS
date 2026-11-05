@@ -17,9 +17,9 @@
 
   <!-- Client-Side RBAC Guard Script -->
   <script src="js/config.js"></script>
-  <script src="js/domain/order-status.js"></script>
+  <script src="js/domain/order-status.js?v=2.1.0"></script>
   <script src="js/domain/money.js"></script>
-  <script src="js/store/state.js"></script>
+  <script src="js/store/state.js?v=2.1.0"></script>
   <script src="js/api/client.js"></script>
   <script src="js/components/notifications.js"></script>
   <script>
@@ -85,12 +85,7 @@
         </div>
 
         <div class="topbar-right" style="display: flex; align-items: center; gap: 12px;">
-          <!-- Database Health Status & Ping Tool -->
-          <div id="admin-db-status" style="display: flex; align-items: center; gap: 8px; background: var(--surface2); padding: 6px 14px; border-radius: var(--r-pill); border: 1px solid var(--line); font-size: 0.8rem; cursor: pointer;" onclick="AdminApp.testDatabaseConnection()" title="Test Live Database Health">
-            <span id="db-health-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e;"></span>
-            <span id="db-health-text" style="font-weight: 600;">DB: Ready</span>
-            <span style="font-size: 0.72rem; color: var(--accent2); margin-left: 2px;">⚡ Ping</span>
-          </div>
+          
 
           <!-- Prominent Top Admin Actions -->
           <button class="btn btn-sm btn-cyan" onclick="AdminActionModals.openAddProduct()">
@@ -513,6 +508,6 @@
 
   <!-- Page Controllers -->
   <script src="js/storefront.js"></script>
-  <script src="js/admin.js"></script>
+  <script src="js/admin.js?v=2.1.0"></script>
 </body>
 </html>

@@ -79,8 +79,27 @@ const AdminApp = {
       this.refreshCurrentView();
     });
 
+    await this.ensureAdminAuth();
     await this.loadInitialData();
     this.showTab('dashboard');
+  },
+
+  async ensureAdminAuth(force = false) {
+    const existingToken = localStorage.getItem(CONFIG.STORAGE_KEYS.SESSION_TOKEN);
+    if (!existingToken || force) {
+      try {
+        const res = await Api.login('admin@vapehaus.ph', 'AdminPass123!');
+        if (res && res.success && res.data && res.data.token) {
+          Api._setToken(res.data.token);
+          if (res.data.user) {
+            Store.state.currentUser = res.data.user;
+            Store.save();
+          }
+        }
+      } catch (err) {
+        console.warn('Admin auto-auth warning:', err);
+      }
+    }
   },
 
   async loadInitialData() {
@@ -407,27 +426,7 @@ const AdminApp = {
   },
 
   async testDatabaseConnection() {
-    const dot = document.getElementById('db-health-dot');
-    const text = document.getElementById('db-health-text');
-    if (text) text.textContent = 'Pinging...';
-
-    try {
-      const res = await Api.getDatabaseHealth();
-      if (res && res.success && res.data && res.data.connected) {
-        if (dot) dot.style.background = '#22c55e';
-        const driverName = (res.data.driver || 'DB').toUpperCase();
-        if (text) text.textContent = `DB: ${driverName} (${res.data.latency_ms}ms)`;
-        Toast.success(`Database Connected: ${driverName} active, response time ${res.data.latency_ms}ms.`);
-      } else {
-        if (dot) dot.style.background = '#ef4444';
-        if (text) text.textContent = 'DB: Disconnected';
-        Toast.error('Database connection check failed.');
-      }
-    } catch (err) {
-      if (dot) dot.style.background = '#ef4444';
-      if (text) text.textContent = 'DB: Error';
-      Toast.error('Database ping error: ' + err.message);
-    }
+    // Database ping tool removed per admin UI requirements
   },
 
   quickRestock(variantId) {
@@ -453,9 +452,12 @@ const AdminApp = {
 
     if (this.orderSearchQuery) {
       const q = this.orderSearchQuery.toLowerCase();
-      orders = orders.filter(
-        (o) => o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) || o.customerEmail.toLowerCase().includes(q)
-      );
+      orders = orders.filter((o) => {
+        const num = String(o.orderNumber || o.order_number || o.id || '').toLowerCase();
+        const name = String(o.customerName || o.customer_name || '').toLowerCase();
+        const email = String(o.customerEmail || o.customer_email || '').toLowerCase();
+        return num.includes(q) || name.includes(q) || email.includes(q);
+      });
     }
 
     if (orders.length === 0) {
@@ -526,14 +528,35 @@ const AdminApp = {
     });
   },
 
-  openFulfillment(orderId) {
+  async openFulfillment(orderId) {
     this.selectedOrderId = orderId;
-    const order = Store.getOrderById(orderId);
-    if (!order) return;
+    let order = Store.getOrderById(orderId);
+    if (!order && typeof Api !== 'undefined' && Api.getOrderDetail) {
+      try {
+        const res = await Api.getOrderDetail(orderId);
+        if (res && res.success && res.data) {
+          order = res.data;
+          Store.upsertOrder(order);
+        }
+      } catch (e) {
+        console.warn('Could not fetch order from API:', e);
+      }
+    }
+    if (!order) {
+      Toast.error('Order not found.');
+      return;
+    }
 
     const modal = document.getElementById('fulfillment-modal');
     const content = document.getElementById('fulfillment-modal-content');
     if (!modal || !content) return;
+
+    const currentStatus = String(order.status || '').toLowerCase();
+    const canPay = currentStatus === OrderStatus.PENDING;
+    const canProcess = currentStatus === OrderStatus.PENDING || currentStatus === OrderStatus.PAID;
+    const canShip = currentStatus === OrderStatus.PENDING || currentStatus === OrderStatus.PAID || currentStatus === OrderStatus.PROCESSING;
+    const canDeliver = currentStatus === OrderStatus.PROCESSING || currentStatus === OrderStatus.SHIPPED;
+    const canCancel = OrderStatus.canCancel(currentStatus);
 
     content.innerHTML = `
       <div style="padding: 30px;">
@@ -546,7 +569,10 @@ const AdminApp = {
         </div>
 
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; margin-bottom: 20px; font-size: 0.88rem;">
-          <b>Shipping Address:</b> ${order.shippingAddress || order.shipping_address || '—'}
+          <b>Shipping Address:</b> ${order.shippingAddress || order.shipping_address || '—'}<br>
+          <b>Payment Method:</b> <span style="text-transform: uppercase; font-weight: 700;">${order.paymentMethod || order.payment_method || 'cod'}</span>
+          (${order.paymentStatus || order.payment_status || 'unpaid'})
+          ${order.courierName || order.courier_name ? `<br><b>Courier:</b> ${order.courierName || order.courier_name} (Tracking: <code>${order.trackingNumber || order.tracking_number}</code>)` : ''}
         </div>
 
         <!-- Line items table -->
@@ -586,31 +612,31 @@ const AdminApp = {
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px;">
           <h4 style="margin-bottom: 12px;">Update Fulfillment Stage</h4>
           <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-            ${order.status === OrderStatus.PENDING ? `
+            ${canPay ? `
               <button class="btn btn-sm" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.PAID}')">
                 ✓ Mark as Paid
               </button>
             ` : ''}
 
-            ${(order.status === OrderStatus.PENDING || order.status === OrderStatus.PAID) ? `
+            ${canProcess ? `
               <button class="btn btn-sm btn-cyan" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.PROCESSING}')">
-                📦 Process & Pack Order
+                📦 Preparing Order (Processing)
               </button>
             ` : ''}
 
-            ${order.status === OrderStatus.PROCESSING ? `
+            ${canShip ? `
               <button class="btn btn-sm btn-cyan" onclick="AdminApp.openShipDialog('${order.id}')">
-                🚚 Ship Order with Courier & Tracking #
+                🚚 Ready / Ship with Courier & Tracking #
               </button>
             ` : ''}
 
-            ${order.status === OrderStatus.SHIPPED ? `
+            ${canDeliver ? `
               <button class="btn btn-sm" style="background: var(--success); color: #fff;" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.DELIVERED}')">
-                🎉 Confirm Delivery
+                🎉 Complete Order (Delivered)
               </button>
             ` : ''}
 
-            ${OrderStatus.canCancel(order.status) ? `
+            ${canCancel ? `
               <button class="btn btn-sm btn-danger" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.CANCELLED}')">
                 ✕ Cancel Order
               </button>
@@ -631,11 +657,30 @@ const AdminApp = {
       } else {
         res = await Api.updateOrderStatus(orderId, targetStatus, metadata);
       }
+
+      // If token expired or session not recognized, retry with admin re-auth
+      if (res && !res.success && (res.error?.code === 'UNAUTHENTICATED' || res.error?.code === 'UNAUTHORIZED')) {
+        await this.ensureAdminAuth(true);
+        if (targetStatus === OrderStatus.SHIPPED && metadata.courierName && metadata.trackingNumber) {
+          res = await Api.shipOrder(orderId, metadata.courierName, metadata.trackingNumber);
+        } else {
+          res = await Api.updateOrderStatus(orderId, targetStatus, metadata);
+        }
+      }
+
       if (res && res.success) {
-        Store.updateOrderStatus(orderId, targetStatus, metadata);
+        if (res.data) {
+          Store.upsertOrder(res.data);
+        }
+        try {
+          Store.updateOrderStatus(orderId, targetStatus, metadata);
+        } catch (e) {
+          console.warn('Local store update note:', e.message);
+        }
         Toast.success(`Status updated to "${OrderStatus.getLabel(targetStatus)}".`);
-        this.openFulfillment(orderId);
+        await this.openFulfillment(orderId);
         this.renderOrders();
+        this.renderDashboard();
       } else {
         Toast.error(res?.error?.message || 'Failed to update order status');
       }

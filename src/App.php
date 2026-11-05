@@ -41,6 +41,7 @@ use Vapehaus\Execution\Order\CancelOrderExecution;
 use Vapehaus\Execution\Order\GetOrderDetailExecution;
 use Vapehaus\Execution\Order\GetUserOrdersExecution;
 use Vapehaus\Execution\Order\PlaceOrderExecution;
+use Vapehaus\Execution\Payment\CreateCheckoutSessionExecution;
 use Vapehaus\Execution\Payment\CreatePaymentIntentExecution;
 use Vapehaus\Execution\Payment\PaymentExecution;
 use Vapehaus\Execution\Review\ReviewExecution;
@@ -60,7 +61,7 @@ use Vapehaus\Infrastructure\Repository\PdoCouponRepository;
 use Vapehaus\Infrastructure\Repository\PdoInventoryAuditRepository;
 use Vapehaus\Infrastructure\Repository\PdoKycRepository;
 use Vapehaus\Infrastructure\Repository\PdoOrderRepository;
-use Vapehaus\Infrastructure\Repository\PdoOtpRepository;
+use Vapehaus\Infrastructure\Repository\HmacOtpRepository;
 use Vapehaus\Infrastructure\Repository\PdoPaymentTransactionRepository;
 use Vapehaus\Infrastructure\Repository\PdoProductRepository;
 use Vapehaus\Infrastructure\Repository\PdoReturnRepository;
@@ -78,6 +79,7 @@ use Vapehaus\Presentation\Controller\CatalogController;
 use Vapehaus\Presentation\Controller\CouponController;
 use Vapehaus\Presentation\Controller\KycController;
 use Vapehaus\Presentation\Controller\OrderController;
+use Vapehaus\Presentation\Controller\PaymentCheckoutController;
 use Vapehaus\Presentation\Controller\PaymentIntentController;
 use Vapehaus\Presentation\Controller\PaymentWebhookController;
 use Vapehaus\Presentation\Controller\ReviewController;
@@ -127,7 +129,7 @@ final class App
         $auditRepo = new PdoInventoryAuditRepository($this->pdo);
         $notifService = new PdoNotificationService($this->pdo);
         $sessionRepo = new PdoSessionRepository($this->pdo);
-        $otpRepo = new PdoOtpRepository($this->pdo);
+        $otpRepo = new HmacOtpRepository();
         $smtpMailer = new SmtpMailer();
 
         $hasher = new PasswordHasher();
@@ -185,6 +187,7 @@ final class App
 
         $paymongoGateway = new PayMongoGateway((string) Env::get('PAYMONGO_SECRET_KEY', ''));
         $createPaymentIntentExec = new CreatePaymentIntentExecution($paymongoGateway, $orderRepo);
+        $createCheckoutSessionExec = new CreateCheckoutSessionExecution($paymongoGateway, $orderRepo);
 
         $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo, $this->pdo);
         $adminDeleteProductExec = new AdminDeleteProductExecution($productRepo);
@@ -222,6 +225,7 @@ final class App
         $wishlistController = new WishlistController($wishlistExec);
         $paymentController = new PaymentWebhookController($paymentExec, $paymongoGateway);
         $paymentIntentController = new PaymentIntentController($createPaymentIntentExec);
+        $paymentCheckoutController = new PaymentCheckoutController($createCheckoutSessionExec);
         $adminController = new AdminController(
             $adminDashboardExec,
             $adminCategoryExec,
@@ -257,8 +261,8 @@ final class App
         $this->router->patch('/api/v1/user/addresses/{id}/default', fn (Request $r, array $p) => $addressController->setDefault($r, $p), [$authRequired]);
         $this->router->delete('/api/v1/user/addresses/{id}', fn (Request $r, array $p) => $addressController->delete($r, $p), [$authRequired]);
         
-        $this->router->get('/api/v1/orders', fn (Request $r) => $userController->getOrders($r), [$authRequired]);
-        $this->router->get('/api/v1/orders/{id}', fn (Request $r, array $p) => $userController->getOrderDetail($r, $p), [$authRequired]);
+        $this->router->get('/api/v1/orders', fn (Request $r) => $userController->getOrders($r), [$authOptional]);
+        $this->router->get('/api/v1/orders/{id}', fn (Request $r, array $p) => $userController->getOrderDetail($r, $p), [$authOptional]);
         $this->router->post('/api/v1/orders/{id}/cancel', fn (Request $r, array $p) => $userController->cancelOrder($r, $p), [$authRequired]);
         $this->router->get('/api/v1/user/orders', fn (Request $r) => $userController->getOrders($r), [$authRequired]);
         $this->router->get('/api/v1/user/orders/{id}', fn (Request $r, array $p) => $userController->getOrderDetail($r, $p), [$authRequired]);
@@ -301,6 +305,8 @@ final class App
         // 9. Checkout & Payment Endpoints & Webhooks
         $this->router->post('/api/v1/checkout', fn (Request $r) => $orderController->checkout($r), [$authOptional]);
         $this->router->post('/api/v1/payments/intent', fn (Request $r) => $paymentIntentController->create($r), [$authOptional]);
+        $this->router->post('/api/v1/payments/checkout-session', fn (Request $r) => $paymentCheckoutController->createSession($r), [$authOptional]);
+        $this->router->post('/api/v1/webhooks/paymongo', fn (Request $r) => $paymentController->handleWebhook($r));
         $this->router->post('/api/v1/webhooks/payments', fn (Request $r) => $paymentController->handleWebhook($r));
         $this->router->post('/api/v1/payments/webhook', fn (Request $r) => $paymentController->handleWebhook($r));
 
@@ -312,6 +318,7 @@ final class App
         $this->router->delete('/api/v1/admin/products/{id}', fn (Request $r, array $p) => $adminController->deleteProduct($r, $p), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/upload-image', fn (Request $r) => $adminController->uploadImage($r), [$authRequired, $adminOnly]);
         $this->router->get('/api/v1/health', fn (Request $r) => $adminController->getDatabaseHealth($r));
+        $this->router->get('/api/v1/admin/db-health', fn (Request $r) => $adminController->getDatabaseHealth($r), [$authRequired, $adminOnly]);
         $this->router->post('/api/v1/admin/products/{id}/variants', fn (Request $r, array $p) => $adminController->createVariant($r, $p), [$authRequired, $adminOnly]);
         
         // Admin Inventory adjustments (both /variants/{id}/stock and /inventory/{id})

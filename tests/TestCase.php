@@ -28,6 +28,9 @@ abstract class TestCase
 
     public function runTest(string $method): void
     {
+        if (class_exists(\Vapehaus\Presentation\Middleware\RateLimiterMiddleware::class)) {
+            \Vapehaus\Presentation\Middleware\RateLimiterMiddleware::reset();
+        }
         $this->setUp();
         $this->expectedException = null;
         $this->expectedExceptionMessage = null;

@@ -25,11 +25,20 @@ final class PaymentWebhookController
     public function handleWebhook(Request $request): Response
     {
         $rawBody = $request->getRawBody();
+        $body = $request->getBody();
+        if (empty($rawBody) && !empty($body)) {
+            $rawBody = (string) json_encode($body);
+        }
+
         $paymongoSignature = $request->getHeader('paymongo-signature');
         $webhookSecret = (string) Env::get('PAYMONGO_WEBHOOK_SECRET', '');
 
-        // If PayMongo signature header is provided and secret is configured, verify HMAC-SHA256 signature
-        if (!empty($paymongoSignature) && !empty($webhookSecret) && !empty($rawBody)) {
+        // If PayMongo signature header is provided, verify HMAC-SHA256 signature
+        if (!empty($paymongoSignature)) {
+            if (empty($webhookSecret)) {
+                return ApiResponse::error('CONFIG_ERROR', 'PayMongo webhook secret is not configured.', [], 500);
+            }
+
             $gateway = $this->gateway ?? new PayMongoGateway((string) Env::get('PAYMONGO_SECRET_KEY', ''));
             if (!$gateway->verifyWebhookSignature($rawBody, $paymongoSignature, $webhookSecret)) {
                 return ApiResponse::error('INVALID_SIGNATURE', 'PayMongo webhook signature verification failed.', [], 401);

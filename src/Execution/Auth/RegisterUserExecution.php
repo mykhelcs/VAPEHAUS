@@ -14,6 +14,7 @@ use Vapehaus\Domain\Repository\SessionRepositoryInterface;
 use Vapehaus\Domain\Repository\UserRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Email;
 use Vapehaus\Domain\ValueObject\Role;
+use Vapehaus\Infrastructure\Repository\HmacOtpRepository;
 use Vapehaus\Infrastructure\Security\PasswordHasherInterface;
 use Vapehaus\Infrastructure\Security\TokenServiceInterface;
 
@@ -55,6 +56,8 @@ final class RegisterUserExecution
         $birthDate = trim((string) ($data['birth_date'] ?? $data['birthDate'] ?? ''));
         $isAgeVerified = (bool) ($data['is_age_verified'] ?? $data['isAgeAttested'] ?? false);
         $otp = trim((string) ($data['otp'] ?? $data['code'] ?? ''));
+        $otpToken = trim((string) ($data['otp_token'] ?? ''));
+        $otpProof = trim((string) ($data['otp_proof'] ?? ''));
 
         $errors = [];
         if ($emailStr === '') {
@@ -82,30 +85,7 @@ final class RegisterUserExecution
 
         $email = new Email($emailStr);
 
-        $existing = $this->userRepository->findByEmail($email->getValue());
-        if ($existing !== null) {
-            throw new ValidationException("Email '{$email->getValue()}' is already registered.", [
-                ['field' => 'email', 'issue' => 'Already taken'],
-            ]);
-        }
-
-        // Validate OTP if repository is configured
-        if ($this->otpRepository !== null) {
-            $isVerified = false;
-            if ($otp !== '') {
-                $isVerified = $this->otpRepository->verifyAndConsumeOtp($email->getValue(), $otp, 'registration');
-            } else {
-                $isVerified = $this->otpRepository->isOtpVerified($email->getValue(), 'registration');
-            }
-
-            if (!$isVerified) {
-                throw new ValidationException('Valid email OTP verification code is required to create an account.', [
-                    ['field' => 'otp', 'issue' => 'Invalid or expired OTP code'],
-                ]);
-            }
-        }
-
-        // Age Verification
+        // Age Verification (RA 11900 - Statutory Gate)
         $dob = DateTimeImmutable::createFromFormat('Y-m-d', $birthDate);
         if (!$dob) {
             throw new ValidationException('Invalid birth date format. Use YYYY-MM-DD.', [
@@ -117,6 +97,43 @@ final class RegisterUserExecution
         $age = $now->diff($dob)->y;
         if ($age < $this->minimumAge) {
             throw new UnderageException($this->minimumAge, $age);
+        }
+
+        $existing = $this->userRepository->findByEmail($email->getValue());
+        if ($existing !== null) {
+            throw new ValidationException("Email '{$email->getValue()}' is already registered.", [
+                ['field' => 'email', 'issue' => 'Already taken'],
+            ]);
+        }
+
+        // Validate OTP if repository is configured
+        if ($this->otpRepository !== null) {
+            $isVerified = false;
+
+            // 1. If an OTP code was provided directly, verify it
+            if ($otp !== '') {
+                if ($this->otpRepository instanceof HmacOtpRepository && $otpToken !== '') {
+                    $this->otpRepository->setProofToken($otpToken);
+                }
+                $isVerified = $this->otpRepository->verifyAndConsumeOtp($email->getValue(), $otp, 'registration');
+            }
+            // 2. Or if a proof token was provided
+            elseif ($otpProof !== '') {
+                if ($this->otpRepository instanceof HmacOtpRepository) {
+                    $this->otpRepository->setProofToken($otpProof);
+                }
+                $isVerified = $this->otpRepository->isOtpVerified($email->getValue(), 'registration');
+            }
+            // 3. Fallback to check if already verified in session / repo
+            else {
+                $isVerified = $this->otpRepository->isOtpVerified($email->getValue(), 'registration');
+            }
+
+            if (!$isVerified) {
+                throw new ValidationException('Valid email OTP verification code is required to create an account.', [
+                    ['field' => 'otp', 'issue' => 'Invalid or expired OTP code'],
+                ]);
+            }
         }
 
         $userId = 'usr_' . bin2hex(random_bytes(8));

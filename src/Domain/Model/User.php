@@ -24,23 +24,29 @@ final class User
 
     public function __construct(
         string $id,
-        Email $email,
+        Email|string $email,
         string $passwordHash,
         string $firstName,
         string $lastName,
         ?string $phone = null,
-        ?Role $role = null,
+        Role|string|null $role = null,
         ?string $birthDate = null,
         bool $isAgeVerified = false,
         ?string $createdAt = null
     ) {
         $this->id = $id;
-        $this->email = $email;
+        $this->email = is_string($email) ? new Email($email) : $email;
         $this->passwordHash = $passwordHash;
         $this->firstName = trim($firstName);
         $this->lastName = trim($lastName);
         $this->phone = $phone ? trim($phone) : null;
-        $this->role = $role ?? Role::customer();
+        if ($role instanceof Role) {
+            $this->role = $role;
+        } elseif (is_string($role)) {
+            $this->role = new Role($role);
+        } else {
+            $this->role = Role::customer();
+        }
         $this->birthDate = $birthDate;
         $this->isAgeVerified = $isAgeVerified;
         $this->createdAt = $createdAt ?? (new DateTimeImmutable())->format('Y-m-d H:i:s');

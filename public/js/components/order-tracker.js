@@ -6,6 +6,8 @@
 const OrderTrackerModal = {
   overlayEl: null,
   currentOrderId: null,
+  _pollTimer: null,
+  _isLoading: false,
 
   init() {
     this.overlayEl = document.getElementById('order-tracker-modal');
@@ -27,17 +29,90 @@ const OrderTrackerModal = {
         this.render();
       }
     });
+
+    // Detect return from PayMongo Hosted Checkout URL
+    this.checkReturnParams();
   },
 
-  showOrder(orderId) {
+  checkReturnParams() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const returnedOrderId = params.get('order_id');
+      const returnStatus = params.get('status');
+
+      if (returnedOrderId) {
+        // Clean URL parameters without reloading
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+
+        if (returnStatus === 'paid') {
+          Toast.success('Payment completed! Tracking order live… 🎉');
+        } else if (returnStatus === 'cancelled') {
+          Toast.info('Payment was cancelled. Order remains pending.');
+        }
+
+        setTimeout(() => {
+          this.showOrder(returnedOrderId);
+        }, 350);
+      }
+    } catch (e) {
+      console.warn('PayMongo return param check error:', e);
+    }
+  },
+
+  async fetchLatestOrder() {
+    if (!this.currentOrderId) return;
+    try {
+      const res = await Api.getOrderDetail(this.currentOrderId);
+      if (res && res.success && res.data) {
+        const order = res.data;
+        if (typeof Store !== 'undefined' && Store.upsertOrder) {
+          Store.upsertOrder(order);
+        }
+      }
+    } catch (e) {
+      console.warn('Tracker live fetch error:', e);
+    } finally {
+      this._isLoading = false;
+      this.render();
+    }
+  },
+
+  startPolling() {
+    this.stopPolling();
+    this._pollTimer = setInterval(() => {
+      if (this.currentOrderId && this.overlayEl && this.overlayEl.classList.contains('open')) {
+        this.fetchLatestOrder();
+      } else {
+        this.stopPolling();
+      }
+    }, 3500);
+  },
+
+  stopPolling() {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = null;
+    }
+  },
+
+  showOrder(orderId, preloadedOrder = null) {
     this.currentOrderId = orderId;
+    if (preloadedOrder && typeof Store !== 'undefined' && Store.upsertOrder) {
+      Store.upsertOrder(preloadedOrder);
+    }
+    this._isLoading = !Store.getOrderById(orderId);
     this.render();
     if (this.overlayEl) {
       this.overlayEl.classList.add('open');
     }
+    this.fetchLatestOrder();
+    this.startPolling();
   },
 
   close() {
+    this.stopPolling();
+    this._isLoading = false;
     if (this.overlayEl) {
       this.overlayEl.classList.remove('open');
     }
@@ -61,7 +136,17 @@ const OrderTrackerModal = {
 
     const order = Store.getOrderById(this.currentOrderId);
     if (!order) {
-      contentEl.innerHTML = `<div style="padding: 40px; text-align: center;">Order not found.</div>`;
+      if (this._isLoading) {
+        contentEl.innerHTML = `
+          <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 12px;">⏳</div>
+            <h3 style="color: var(--text);">Loading order details…</h3>
+            <p style="font-size: 0.85rem; margin-top: 6px;">Order Reference: ${this.currentOrderId}</p>
+          </div>
+        `;
+      } else {
+        contentEl.innerHTML = `<div style="padding: 40px; text-align: center;">Order not found.</div>`;
+      }
       return;
     }
 
@@ -93,19 +178,19 @@ const OrderTrackerModal = {
             </div>
             <div class="stepper-stage ${currentStage >= 2 ? (currentStage === 2 ? 'active' : 'completed') : ''}">
               <div class="stepper-node">${currentStage > 2 ? '✓' : '2'}</div>
-              <span>Payment</span>
+              <span>Paid</span>
             </div>
             <div class="stepper-stage ${currentStage >= 3 ? (currentStage === 3 ? 'active' : 'completed') : ''}">
               <div class="stepper-node">${currentStage > 3 ? '✓' : '3'}</div>
-              <span>Packing</span>
+              <span>Preparing</span>
             </div>
             <div class="stepper-stage ${currentStage >= 4 ? (currentStage === 4 ? 'active' : 'completed') : ''}">
               <div class="stepper-node">${currentStage > 4 ? '✓' : '4'}</div>
-              <span>Shipped</span>
+              <span>Ready</span>
             </div>
             <div class="stepper-stage ${currentStage >= 5 ? 'completed' : ''}">
               <div class="stepper-node">${currentStage === 5 ? '✓' : '5'}</div>
-              <span>Delivered</span>
+              <span>Completed</span>
             </div>
           </div>
         ` : `
