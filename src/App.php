@@ -88,6 +88,7 @@ use Vapehaus\Presentation\Controller\UserController;
 use Vapehaus\Presentation\Controller\WishlistController;
 use Vapehaus\Presentation\Http\Request;
 use Vapehaus\Presentation\Http\Response;
+use Vapehaus\Presentation\Response\ApiResponse;
 use Vapehaus\Presentation\Middleware\AuthMiddleware;
 use Vapehaus\Presentation\Middleware\RateLimiterMiddleware;
 use Vapehaus\Presentation\Middleware\RequireRoleMiddleware;
@@ -98,17 +99,33 @@ final class App
     private Router $router;
     private PDO $pdo;
 
-    public function __construct(?PDO $pdo = null)
+    public function __construct(?PDO $pdo = null, bool $ensureSchema = false)
     {
         $this->pdo = $pdo ?? DatabaseConnection::getPdo();
-        $this->initializeDatabase();
+        
+        // Runtime schema initialization removed for production.
+        // Pure Supabase PostgreSQL: all tables & accounts live in Supabase.
+        // Only initialize if explicitly requested or running isolated in-memory test SQLite.
+        if ($ensureSchema || ($pdo !== null && $this->isInMemorySqlite($this->pdo))) {
+            SchemaManager::ensureInitialized($this->pdo);
+        }
+
         $this->router = new Router();
         $this->registerRoutes();
     }
 
-    private function initializeDatabase(): void
+    private function isInMemorySqlite(PDO $pdo): bool
     {
-        SchemaManager::ensureInitialized($this->pdo);
+        try {
+            if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') {
+                return false;
+            }
+            $stmt = $pdo->query('PRAGMA database_list');
+            $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+            return empty($row['file']);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function registerRoutes(): void
@@ -243,6 +260,16 @@ final class App
             $uploadImageExec,
             $checkDbHealthExec
         );
+
+        // 0. Root & API Service Discovery
+        $rootDiscoveryHandler = fn () => ApiResponse::success([
+            'service' => 'VAPEHAUS API',
+            'version' => '2.0.2',
+            'status'  => 'operational',
+        ]);
+        $this->router->get('/', $rootDiscoveryHandler);
+        $this->router->get('/api', $rootDiscoveryHandler);
+        $this->router->get('/api/v1', $rootDiscoveryHandler);
 
         // 1. Auth Endpoints
         $this->router->post('/api/v1/auth/register', fn (Request $r) => $authController->register($r), [$authRateLimiter]);

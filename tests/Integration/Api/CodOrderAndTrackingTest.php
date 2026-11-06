@@ -31,8 +31,8 @@ final class CodOrderAndTrackingTest extends TestCase
     public function testGuestCodOrderCanBeTrackedImmediatelyWithoutAuth(): void
     {
         $checkoutReq = new Request('POST', '/api/v1/checkout', [], [
-            'customer_name' => 'Juan Dela Cruz',
-            'customer_email' => 'juan.cod@vapehaus.ph',
+            'customer_name' => 'Juan Customer',
+            'customer_email' => 'customer@vapehaus.ph',
             'customer_phone' => '+639171234567',
             'shipping_address' => '123 Ayala Ave, Makati, Metro Manila 1226',
             'payment_method' => 'cod',

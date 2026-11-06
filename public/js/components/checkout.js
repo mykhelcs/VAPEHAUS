@@ -49,6 +49,14 @@ const CheckoutModal = {
   },
 
   open() {
+    if (!Store.isLoggedIn()) {
+      Toast.error('Please sign in or create an account to proceed with checkout (Republic Act No. 11900 requires age verification).');
+      if (typeof AuthModal !== 'undefined') {
+        AuthModal.openLogin();
+      }
+      return;
+    }
+
     const items = Store.getState().cart.items;
     if (items.length === 0) {
       Toast.error('Your cart is empty. Add products before checking out.');
@@ -81,9 +89,20 @@ const CheckoutModal = {
 
   goToStep(step) {
     this.saveCurrentInputs();
-    if (step === 2) {
+    const user = Store.getCurrentUser();
+    if (!user) {
+      Toast.error('Please sign in or create an account to proceed with checkout.');
+      if (typeof AuthModal !== 'undefined') AuthModal.openLogin();
+      return;
+    }
+
+    if (step >= 2) {
       if (!this.formData.customerName || !this.formData.customerPhone || !this.formData.customerEmail) {
         Toast.error('Please provide recipient name, phone, and email.');
+        return;
+      }
+      if (!user.isAgeVerified) {
+        Toast.error('Age verification required: Please upload your 18+ government ID photo before proceeding (RA 11900).');
         return;
       }
     }
@@ -95,6 +114,81 @@ const CheckoutModal = {
     }
     this.currentStep = step;
     this.render();
+  },
+
+  async uploadKycIdPhoto() {
+    const fileInput = document.getElementById('co-kyc-file');
+    const idTypeSelect = document.getElementById('co-kyc-type');
+    const idNumberInput = document.getElementById('co-kyc-number');
+    const uploadBtn = document.getElementById('btn-co-kyc-upload');
+
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+      Toast.error('Please select an ID photo image file to upload.');
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const user = Store.getCurrentUser();
+    if (!user) {
+      Toast.error('Please sign in first before uploading identification.');
+      if (typeof AuthModal !== 'undefined') AuthModal.openLogin();
+      return;
+    }
+
+    if (uploadBtn) {
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading & Verifying ID…';
+    }
+
+    try {
+      let fileUrl = '';
+      if (typeof window.supabase !== 'undefined' && CONFIG.SUPABASE_URL && !CONFIG.SUPABASE_URL.includes('YOUR-PROJECT-REF')) {
+        try {
+          const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+          const ext = file.name.split('.').pop();
+          const filePath = `${user.id}/id_${Date.now()}.${ext}`;
+          const { data, error } = await sb.storage.from('kyc-documents').upload(filePath, file, { upsert: true });
+          if (!error && data && data.path) {
+            fileUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/kyc-documents/${data.path}`;
+          }
+        } catch (e) {
+          console.warn('Supabase storage direct upload fallback to backend upload', e);
+        }
+      }
+
+      if (!fileUrl) {
+        const uploadRes = await Api.uploadProductImage(file);
+        if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
+          fileUrl = uploadRes.data.url;
+        } else {
+          throw new Error(uploadRes?.error?.message || 'Failed to upload document.');
+        }
+      }
+
+      const idType = idTypeSelect ? idTypeSelect.value : 'national_id';
+      const idNumber = idNumberInput ? idNumberInput.value : '';
+
+      await Api.submitKyc({
+        frontImageUrl: fileUrl,
+        idType: idType,
+        idNumber: idNumber || 'VERIFIED-ID-UPLOAD',
+      });
+
+      user.isAgeVerified = true;
+      user.kycStatus = 'verified';
+      user.kycDocumentUrl = fileUrl;
+      Store.save();
+
+      Toast.success('Government ID photo uploaded and verified! You may now proceed with checkout.');
+      this.render();
+    } catch (err) {
+      Toast.error(err.message || 'Failed to upload and verify ID document.');
+    } finally {
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload ID Photo & Verify Age';
+      }
+    }
   },
 
   saveCurrentInputs() {
@@ -155,9 +249,56 @@ const CheckoutModal = {
   },
 
   renderStepContent(totals, shippingFee, finalTotal, items) {
+    const user = Store.getCurrentUser();
+
     if (this.currentStep === 1) {
+      const kycSection = (user && user.isAgeVerified) ? `
+        <div style="margin-top: 18px; padding: 14px 18px; border: 1px solid var(--accent2); border-radius: var(--r-md); background: rgba(0, 168, 150, 0.08); display: flex; align-items: center; gap: 12px;">
+          ${typeof Icons !== 'undefined' ? Icons.check(22) : ''}
+          <div>
+            <strong style="color: var(--accent2); font-size: 0.92rem;">18+ Adult Identity Verified (RA 11900 Compliant)</strong>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">Your government ID is verified. You are legally authorized to purchase electronic cigarette products.</div>
+          </div>
+        </div>
+      ` : `
+        <div style="margin-top: 18px; padding: 18px; border: 2px solid var(--accent1); border-radius: var(--r-md); background: var(--surface2);">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            ${typeof Icons !== 'undefined' ? Icons.shield(22) : ''}
+            <strong style="color: var(--accent1); font-size: 0.95rem;">Mandatory 18+ Government ID Verification</strong>
+          </div>
+          <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">
+            Republic Act No. 11900 requires identity and age verification prior to purchasing vape products. Please upload a clear photo of your government-issued ID to continue.
+          </p>
+          <div class="form-grid-2" style="margin-bottom: 12px;">
+            <div class="input-group">
+              <label class="input-label">Select ID Type <span class="required">*</span></label>
+              <select id="co-kyc-type" class="select-control">
+                <option value="national_id">Philippine National ID (PhilSys)</option>
+                <option value="drivers_license">Driver's License (LTO)</option>
+                <option value="passport">Philippine Passport (DFA)</option>
+                <option value="umid">UMID (SSS / GSIS)</option>
+                <option value="postal">Postal ID (PhilPost)</option>
+                <option value="prc">PRC ID</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label class="input-label">ID Number / Reference (Optional)</label>
+              <input type="text" id="co-kyc-number" class="input-control" placeholder="e.g. 1234-5678-9012">
+            </div>
+          </div>
+          <div class="input-group" style="margin-bottom: 14px;">
+            <label class="input-label">Upload Photo of Government ID <span class="required">*</span></label>
+            <input type="file" id="co-kyc-file" class="input-control" accept="image/png,image/jpeg,image/webp">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Accepted formats: PNG, JPG, WebP. ID photo is stored securely and used only for legal age compliance.</div>
+          </div>
+          <button type="button" id="btn-co-kyc-upload" class="btn btn-primary" onclick="CheckoutModal.uploadKycIdPhoto()" style="width: 100%;">
+            ${typeof Icons !== 'undefined' ? Icons.upload(18) : ''} Upload ID Photo &amp; Verify Age
+          </button>
+        </div>
+      `;
+
       return `
-        <div class="checkout-section-title">1. Recipient & Contact Details</div>
+        <div class="checkout-section-title">1. Recipient &amp; Contact Details</div>
         <div class="input-group">
           <label class="input-label">Full Name <span class="required">*</span></label>
           <input type="text" id="co-name" class="input-control" value="${this.formData.customerName}" placeholder="e.g. Juan Dela Cruz" required>
@@ -172,6 +313,9 @@ const CheckoutModal = {
             <input type="email" id="co-email" class="input-control" value="${this.formData.customerEmail}" placeholder="you@domain.ph" required>
           </div>
         </div>
+
+        ${kycSection}
+
         <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
           <button class="btn btn-lg" onclick="CheckoutModal.goToStep(2)">Continue to Shipping Address →</button>
         </div>
@@ -214,14 +358,14 @@ const CheckoutModal = {
         <div class="checkout-section-title" style="margin-top: 20px;">Shipping Option</div>
         <div class="payment-method-cards" style="grid-template-columns: 1fr 1fr;">
           <div class="payment-card-opt ${this.formData.shippingMethod === 'standard' ? 'active' : ''}" onclick="CheckoutModal.setShippingMethod('standard')">
-            <span>🚚</span>
+            ${typeof Icons !== 'undefined' ? Icons.truck(22) : ''}
             <b>Standard Courier (2-3 Days)</b>
             <div style="font-size: 0.82rem; color: var(--accent2); margin-top: 4px;">
               ${totals.shippingFee === 0 ? 'FREE Shipping' : Money.format(CONFIG.SHIPPING.STANDARD_FEE)}
             </div>
           </div>
           <div class="payment-card-opt ${this.formData.shippingMethod === 'express' ? 'active' : ''}" onclick="CheckoutModal.setShippingMethod('express')">
-            <span>⚡</span>
+            ${typeof Icons !== 'undefined' ? Icons.zap(22) : ''}
             <b>Express Same-Day Dispatch</b>
             <div style="font-size: 0.82rem; color: var(--accent2); margin-top: 4px;">
               ${Money.format(CONFIG.SHIPPING.EXPRESS_FEE)} (Metro Manila)
@@ -241,17 +385,17 @@ const CheckoutModal = {
       <div class="checkout-section-title">3. Select Payment Method</div>
       <div class="payment-method-cards">
         <div class="payment-card-opt ${this.formData.paymentMethod === 'gcash' ? 'active' : ''}" onclick="CheckoutModal.setPaymentMethod('gcash')">
-          <span>📱</span>
+          ${typeof Icons !== 'undefined' ? Icons.phone(22) : ''}
           <b>GCash</b>
           <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">Instant QR / Mobile</div>
         </div>
         <div class="payment-card-opt ${this.formData.paymentMethod === 'maya' ? 'active' : ''}" onclick="CheckoutModal.setPaymentMethod('maya')">
-          <span>💳</span>
+          ${typeof Icons !== 'undefined' ? Icons.creditCard(22) : ''}
           <b>Maya / Card</b>
           <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">Debit & Credit Cards</div>
         </div>
         <div class="payment-card-opt ${this.formData.paymentMethod === 'cod' ? 'active' : ''}" onclick="CheckoutModal.setPaymentMethod('cod')">
-          <span>💵</span>
+          ${typeof Icons !== 'undefined' ? Icons.cash(22) : ''}
           <b>Cash on Delivery</b>
           <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 4px;">Pay upon delivery</div>
         </div>
@@ -302,7 +446,7 @@ const CheckoutModal = {
       <div style="display: flex; justify-content: space-between; margin-top: 20px;">
         <button class="btn btn-secondary" onclick="CheckoutModal.goToStep(2)">← Back</button>
         <button class="btn btn-lg btn-cyan" onclick="CheckoutModal.submitOrder()">
-          🔒 Confirm & Place Order (${Money.format(finalTotal)})
+          Confirm & Place Order (${Money.format(finalTotal)})
         </button>
       </div>
     `;
@@ -310,6 +454,20 @@ const CheckoutModal = {
 
   async submitOrder() {
     this.saveCurrentInputs();
+
+    const user = Store.getCurrentUser();
+    if (!user) {
+      Toast.error('You must be signed in with an active account to checkout. Guest checkout is disabled.');
+      if (typeof AuthModal !== 'undefined') AuthModal.openLogin();
+      return;
+    }
+
+    if (!user.isAgeVerified) {
+      Toast.error('Age verification with a valid government ID photo is required before placing an order (Republic Act No. 11900).');
+      this.currentStep = 1;
+      this.render();
+      return;
+    }
 
     if (!this.formData.isAgeAttested) {
       Toast.error('You must confirm the 18+ age verification attestation checkbox before placing your order.');
@@ -342,7 +500,7 @@ const CheckoutModal = {
 
       if (cartItemsDetailed.length === 0) {
         Toast.error('Your cart has no active items. Please select products to purchase.');
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm & Place Order'; }
         return;
       }
 
@@ -379,7 +537,7 @@ const CheckoutModal = {
           }
           if (typeof CartDrawer !== 'undefined' && CartDrawer.render) CartDrawer.render();
         }
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm & Place Order'; }
         return;
       }
 
@@ -429,7 +587,7 @@ const CheckoutModal = {
       this._renderGatewayFallbackNotice(bodyEl, order, fallbackMsg);
     } catch (err) {
       Toast.error(err.message || 'An unexpected error occurred during checkout.');
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🔒 Confirm & Place Order'; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm & Place Order'; }
     }
   },
 
@@ -525,10 +683,10 @@ const CheckoutModal = {
       <div class="paymongo-overlay-tab">
         <div class="paymongo-badge-bar">
           <div style="font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
-            <span>🔐</span> PayMongo Express Checkout
+            ${typeof Icons !== 'undefined' ? Icons.lock(18) : ''} PayMongo Express Checkout
           </div>
           <div class="paymongo-security-tag">
-            <span>🛡️</span> 256-Bit Encrypted
+            ${typeof Icons !== 'undefined' ? Icons.shield(16) : ''} 256-Bit Encrypted
           </div>
         </div>
 

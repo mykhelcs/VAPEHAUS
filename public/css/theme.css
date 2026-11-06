@@ -1,26 +1,24 @@
 /**
  * VAPEHAUS DESIGN SYSTEM - THEME TOKENS
- * Dark Luxury Cyberpunk Palette & Base Primitives
+ * Grounded Slate Retail Aesthetic (Solid Flat Colors, Zero Gradients, Zero Neon Glow)
  */
 
 :root {
-  /* Color Palette */
-  --bg: #0b0b10;
-  --surface: #14141c;
-  --surface2: #1c1c28;
-  --surface3: #242434;
-  --text: #f4f4f8;
-  --text-muted: #9494a8;
-  --line: #262636;
-  --line-strong: #38384f;
+  /* Grounded Dark Slate Color Palette */
+  --bg: #12141a;
+  --surface: #1a1d25;
+  --surface2: #222631;
+  --surface3: #2a2f3d;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --line: #2d3342;
+  --line-strong: #3f475a;
 
-  /* Accent Colors */
-  --accent: #8b5cf6;
-  --accent-hover: #9d74f8;
-  --accent-glow: rgba(139, 92, 246, 0.35);
-  --accent2: #22d3ee;
-  --accent2-hover: #38bdf8;
-  --accent2-glow: rgba(34, 211, 238, 0.3);
+  /* Solid Canva-Style Accent Colors (Strictly NO Gradients) */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent2: #0284c7;
+  --accent2-hover: #0369a1;
 
   /* Status Colors */
   --success: #10b981;
@@ -36,22 +34,20 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
-  /* Radii */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
-  --r-xl: 24px;
-  --r-pill: 9999px;
+  /* Practical Functional Radii (Grounded, Not overly bubbly) */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-pill: 20px;
 
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
 
-  /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 0 30px var(--accent-glow);
-  --shadow-cyan-glow: 0 0 30px var(--accent2-glow);
+  /* Grounded Natural Shadows (NO Neon Bloom) */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 *, *::before, *::after {
@@ -96,17 +92,24 @@ img, svg {
   max-width: 100%;
 }
 
+/* Canva Icon Utility */
+.canva-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 /* Base Primitives */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 11px 22px;
-  border-radius: var(--r-pill);
+  padding: 10px 20px;
+  border-radius: var(--r-md);
   font-weight: 600;
   font-size: 0.9rem;
-  border: 1px solid transparent;
+  border: 1px solid var(--accent);
   background: var(--accent);
   color: #ffffff;
   transition: var(--transition-fast);
@@ -115,11 +118,11 @@ img, svg {
 
 .btn:hover {
   background: var(--accent-hover);
-  box-shadow: 0 4px 20px var(--accent-glow);
+  border-color: var(--accent-hover);
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: translateY(1px);
 }
 
 .btn-secondary {
@@ -135,12 +138,13 @@ img, svg {
 
 .btn-cyan {
   background: var(--accent2);
-  color: #0b0b10;
+  border-color: var(--accent2);
+  color: #ffffff;
 }
 
 .btn-cyan:hover {
   background: var(--accent2-hover);
-  box-shadow: 0 4px 20px var(--accent2-glow);
+  border-color: var(--accent2-hover);
 }
 
 .btn-ghost {
@@ -152,26 +156,30 @@ img, svg {
 .btn-ghost:hover {
   color: var(--text);
   border-color: var(--line-strong);
+  background: var(--surface2);
 }
 
 .btn-danger {
   background: var(--danger);
+  border-color: var(--danger);
   color: #ffffff;
 }
 
 .btn-danger:hover {
   background: #dc2626;
-  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+  border-color: #dc2626;
 }
 
 .btn-sm {
   padding: 6px 14px;
   font-size: 0.8rem;
+  border-radius: var(--r-sm);
 }
 
 .btn-lg {
-  padding: 14px 28px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  font-size: 0.98rem;
+  border-radius: var(--r-md);
 }
 
 .btn-block {
@@ -182,8 +190,8 @@ img, svg {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
-  border-radius: var(--r-pill);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -197,7 +205,7 @@ img, svg {
 
 .badge-cyan {
   background: var(--accent2);
-  color: #0b0b10;
+  color: #ffffff;
 }
 
 .badge-success {
@@ -256,7 +264,7 @@ img, svg {
 .input-control:focus, .select-control:focus, .textarea-control:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  background: var(--surface2);
 }
 
 .textarea-control {

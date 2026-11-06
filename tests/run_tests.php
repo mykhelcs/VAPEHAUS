@@ -12,14 +12,20 @@ use Vapehaus\Tests\Integration\Api\AuthApiTest;
 use Vapehaus\Tests\Integration\Api\CodOrderAndTrackingTest;
 use Vapehaus\Tests\Integration\Api\PayMongoCheckoutWebhookTest;
 use Vapehaus\Tests\TestCase;
+use Vapehaus\Tests\Unit\DesignSystemConstraintTest;
 use Vapehaus\Tests\Unit\Execution\AdminDeleteProductExecutionTest;
 use Vapehaus\Tests\Unit\Execution\CreateCheckoutSessionExecutionTest;
 use Vapehaus\Tests\Unit\Execution\DatabaseHealthExecutionTest;
 use Vapehaus\Tests\Unit\Execution\Order\PlaceOrderExecutionTest;
 use Vapehaus\Tests\Unit\HmacOtpRepositoryTest;
+use Vapehaus\Tests\Unit\CheckoutAuthAndKycConstraintTest;
 use Vapehaus\Tests\Unit\PayMongoGatewayTest;
+use Vapehaus\Tests\Unit\RootRoutingTest;
 
 $testClasses = [
+    CheckoutAuthAndKycConstraintTest::class,
+    RootRoutingTest::class,
+    DesignSystemConstraintTest::class,
     DomainTest::class,
     ExecutionTest::class,
     HmacOtpRepositoryTest::class,

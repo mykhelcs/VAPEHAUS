@@ -165,7 +165,7 @@ const OrderTrackerModal = {
 
     contentEl.innerHTML = `
       <div class="order-success-body">
-        <div class="order-success-icon">${isCancelled ? '❌' : '📦'}</div>
+        <div class="order-success-icon">${isCancelled ? (typeof Icons !== 'undefined' ? Icons.close(36) : '✕') : (typeof Icons !== 'undefined' ? Icons.box(36) : 'Package')}</div>
         <h2 style="font-size: 1.6rem;">${isCancelled ? 'Order Cancelled' : 'Order Confirmed &amp; In Progress'}</h2>
         <div class="order-number-banner">Order #${order.orderNumber || order.order_number || order.id}</div>
 
@@ -216,7 +216,7 @@ const OrderTrackerModal = {
             <div style="border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
               <div>
                 <p style="font-size: 0.78rem; color: var(--text-muted);">Courier Partner</p>
-                <b>🚚 ${order.courierName || order.courier_name}</b>
+                <b>${typeof Icons !== 'undefined' ? Icons.truck(16) : ''} ${order.courierName || order.courier_name}</b>
               </div>
               <div>
                 <p style="font-size: 0.78rem; color: var(--text-muted);">Waybill / Tracking No.</p>

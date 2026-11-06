@@ -124,7 +124,7 @@ const StorefrontApp = {
           return `
           <div class="search-item" onclick="StorefrontApp.handleSearchItemClick('${p.id}')">
             <div class="search-item-thumb">
-              <div class="device-art" style="width: 20px; height: 32px; border-radius: 4px; background: linear-gradient(160deg, ${c1}, ${c2});"></div>
+              <div class="device-art" style="width: 20px; height: 32px; border-radius: 4px; background: var(--surface3); border: 1px solid var(--line);"></div>
             </div>
             <div class="search-item-info">
               <div class="search-item-title">${p.name}</div>
@@ -249,7 +249,7 @@ const StorefrontApp = {
     if (products.length === 0) {
       gridEl.innerHTML = `
         <div style="grid-column: 1 / -1; padding: 60px 20px; text-align: center; color: var(--text-muted);">
-          <div style="font-size: 3rem; margin-bottom: 12px;">🔍</div>
+          <div style="margin-bottom: 12px; color: var(--text-muted);">${typeof Icons !== 'undefined' ? Icons.search(48) : ''}</div>
           <h3>No matching vape products found</h3>
           <p style="margin-top: 8px;">Try clearing filters or search for another keyword.</p>
         </div>
@@ -277,7 +277,7 @@ const StorefrontApp = {
           <div class="product-thumb">
             ${p.badge ? `<span class="badge badge-cyan product-badge">${p.badge}</span>` : ''}
             ${mediaHtml}
-            <div class="product-quickview-pill">🔍 View Details</div>
+            <div class="product-quickview-pill">${typeof Icons !== 'undefined' ? Icons.search(14) : ''} View Details</div>
             <div class="product-stock-tag ${totalStock < 10 ? 'low' : ''}">
               ${hasStock ? (totalStock < 10 ? `Only ${totalStock} left` : 'In Stock') : 'Out of Stock'}
             </div>
@@ -423,10 +423,10 @@ const StorefrontApp = {
         <!-- Account Tabs -->
         <div style="display: flex; gap: 12px; margin-bottom: 20px;">
           <button class="btn btn-secondary btn-sm" id="tab-btn-orders" onclick="StorefrontApp.showAccountTab('orders')">
-            📦 My Orders (${orders.length})
+            ${typeof Icons !== 'undefined' ? Icons.box(16) : ''} My Orders (${orders.length})
           </button>
           <button class="btn btn-secondary btn-sm" id="tab-btn-kyc" onclick="StorefrontApp.showAccountTab('kyc')">
-            🪪 18+ Age KYC Verification
+            ${typeof Icons !== 'undefined' ? Icons.idCard(16) : ''} 18+ Age KYC Verification
           </button>
         </div>
 
@@ -444,7 +444,7 @@ const StorefrontApp = {
               Close
             </button>
             <button class="btn btn-danger btn-sm" onclick="StorefrontApp.closeAccountModal(); AuthModal.logout();">
-              🚪 Sign Out
+              ${typeof Icons !== 'undefined' ? Icons.logout(16) : ''} Sign Out
             </button>
           </div>
         </div>
@@ -480,7 +480,7 @@ const StorefrontApp = {
           </p>
 
           <div style="background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--r-md); padding: 24px; text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 2.4rem; margin-bottom: 8px;">🪪</div>
+            <div style="margin-bottom: 8px; color: var(--accent2);">${typeof Icons !== 'undefined' ? Icons.idCard(42) : ''}</div>
             <div style="font-weight: 600; margin-bottom: 4px;">Philippine Passport / Driver's License / UMID</div>
             <div style="font-size: 0.8rem; color: var(--text-muted);">Current Status: <b style="color: var(--success);">${isVerified ? 'VERIFIED (18+)' : 'PENDING REVIEW'}</b></div>
           </div>

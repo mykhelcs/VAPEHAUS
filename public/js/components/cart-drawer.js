@@ -92,7 +92,7 @@ const CartDrawer = {
     if (items.length === 0) {
       itemsContainer.innerHTML = `
         <div class="cart-empty-state">
-          <span>🛒</span>
+          ${typeof Icons !== 'undefined' ? Icons.cart(48) : ''}
           <h3>Your cart is empty</h3>
           <p style="font-size: 0.88rem; margin: 8px 0 20px;">Discover authentic devices & premium e-liquids.</p>
           <button class="btn btn-secondary" onclick="CartDrawer.close()">Start Shopping</button>
@@ -105,7 +105,7 @@ const CartDrawer = {
     itemsContainer.innerHTML = items.map((item) => `
       <div class="cart-item-row">
         <div class="cart-item-thumb">
-          <div class="device-art" style="width: 22px; height: 38px; border-radius: 6px; background: linear-gradient(160deg, ${item.color1 || '#8b5cf6'}, ${item.color2 || '#22d3ee'});"></div>
+          <div class="device-art" style="width: 22px; height: 38px; border-radius: 6px; background: var(--surface3); border: 1px solid var(--line);"></div>
         </div>
         <div class="cart-item-details">
           <div class="cart-item-title">${item.productName}</div>
@@ -201,6 +201,13 @@ const CartDrawer = {
 
   proceedToCheckout() {
     this.close();
+    if (!Store.isLoggedIn()) {
+      Toast.warning('Please sign in or create an account to proceed to checkout.');
+      if (typeof AuthModal !== 'undefined') {
+        AuthModal.openLogin();
+      }
+      return;
+    }
     if (typeof CheckoutModal !== 'undefined') {
       CheckoutModal.open();
     }

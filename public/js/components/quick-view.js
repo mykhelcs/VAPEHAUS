@@ -262,10 +262,10 @@ const QuickViewModal = {
           <!-- Action Buttons -->
           <div style="display: flex; gap: 12px;">
             <button class="btn btn-lg btn-block" onclick="QuickViewModal.handleAddToCart()" ${isOutOfStock ? 'disabled' : ''}>
-              🛒 Add to Cart
+              ${typeof Icons !== 'undefined' ? Icons.cart(16) : ''} Add to Cart
             </button>
             <button class="btn btn-lg btn-cyan btn-block" onclick="QuickViewModal.handleBuyNow()" ${isOutOfStock ? 'disabled' : ''}>
-              ⚡ Buy Now
+              ${typeof Icons !== 'undefined' ? Icons.zap(16) : ''} Buy Now
             </button>
           </div>
 
@@ -294,6 +294,13 @@ const QuickViewModal = {
 
   handleBuyNow() {
     if (!this.selectedVariant) return;
+    if (!Store.isLoggedIn()) {
+      Toast.warning('Please sign in or create an account to proceed to checkout.');
+      if (typeof AuthModal !== 'undefined') {
+        AuthModal.openLogin();
+      }
+      return;
+    }
     try {
       Store.addToCart(this.selectedVariant.id, this.quantity);
       if (typeof Api !== 'undefined' && Api.addToCart) {

@@ -75,10 +75,10 @@ const AuthModal = {
     if (!input) return;
     if (input.type === 'password') {
       input.type = 'text';
-      toggleBtn.textContent = '🙈';
+      toggleBtn.innerHTML = typeof Icons !== 'undefined' ? Icons.eyeOff(16) : 'Hide';
     } else {
       input.type = 'password';
-      toggleBtn.textContent = '👁️';
+      toggleBtn.innerHTML = typeof Icons !== 'undefined' ? Icons.eye(16) : 'Show';
     }
   },
 
@@ -107,7 +107,7 @@ const AuthModal = {
     if (age >= 18) {
       helperEl.innerHTML = `<span style="color: var(--success); font-weight: 700;">✓ Age: ${age} (Legal Adult 18+ Eligible)</span>`;
     } else {
-      helperEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">⚠️ Age: ${age} (Underage: Must be at least 18 years old)</span>`;
+      helperEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">(Underage: Must be at least 18 years old)</span>`;
     }
   },
 
@@ -155,7 +155,7 @@ const AuthModal = {
           </div>
           <div style="position: relative;">
             <input type="password" id="auth-login-password" class="input-control" placeholder="Enter your password" required style="padding-right: 42px;">
-            <button type="button" class="password-toggle-btn" onclick="AuthModal.togglePasswordVisibility('auth-login-password', this)">👁️</button>
+            <button type="button" class="password-toggle-btn" onclick="AuthModal.togglePasswordVisibility('auth-login-password', this)">${typeof Icons !== 'undefined' ? Icons.eye(16) : 'Show'}</button>
           </div>
         </div>
 
@@ -183,7 +183,7 @@ const AuthModal = {
       return `
         <form onsubmit="AuthModal.handleRegisterOtpSubmit(event)">
           <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 2rem; margin-bottom: 8px;">📩</div>
+            <div style="margin-bottom: 8px; color: var(--accent2);">${typeof Icons !== 'undefined' ? Icons.mail(36) : ''}</div>
             <h3>Enter Verification Code</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
               A 6-digit code has been dispatched to <b>${this.regPendingData.email}</b>.
@@ -277,7 +277,7 @@ const AuthModal = {
       return `
         <form onsubmit="AuthModal.handleResetPasswordSubmit(event)">
           <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 2rem; margin-bottom: 8px;">🔑</div>
+            <div style="margin-bottom: 8px; color: var(--accent2);">${typeof Icons !== 'undefined' ? Icons.key(36) : ''}</div>
             <h3>Set New Password</h3>
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
               Enter the OTP sent to <b>${this.forgotEmail}</b> along with your new password.
@@ -308,7 +308,7 @@ const AuthModal = {
     return `
       <form onsubmit="AuthModal.handleForgotPasswordSubmit(event)">
         <div style="text-align: center; margin-bottom: 20px;">
-          <div style="font-size: 2rem; margin-bottom: 8px;">🔒</div>
+          <div style="margin-bottom: 8px; color: var(--accent2);">${typeof Icons !== 'undefined' ? Icons.lock(36) : ''}</div>
           <h3>Reset Your Password</h3>
           <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
             Enter your registered email address and we'll dispatch a 6-digit recovery OTP code.
@@ -548,14 +548,14 @@ const AuthModal = {
     if (!user) {
       authContainer.innerHTML = `
         <button class="btn-header-auth" onclick="AuthModal.openLogin()" title="Sign In or Register">
-          <span>👤</span>
+          ${typeof Icons !== 'undefined' ? Icons.user(16) : ''}
           <b>Sign In</b>
         </button>
       `;
     } else if (user.role === 'admin') {
       authContainer.innerHTML = `
         <button class="btn-header-auth admin" onclick="window.location.href='admin.html'" title="Administrator Session - Go to Admin Dashboard">
-          <span>⚡</span>
+          ${typeof Icons !== 'undefined' ? Icons.zap(16) : ''}
           <b>Admin Portal</b>
         </button>
       `;

@@ -77,7 +77,20 @@ class VapehausStore {
     } catch (e) {
       console.warn('Falling back to clean state', e);
     }
-    return this.getInitialSeedData();
+    const seed = this.getInitialSeedData();
+    try {
+      const offlineCache = localStorage.getItem('VAPEHAUS_OFFLINE_CATALOG_CACHE');
+      if (offlineCache) {
+        const cached = JSON.parse(offlineCache);
+        if (cached && Array.isArray(cached.products) && cached.products.length > 0) {
+          seed.products = cached.products;
+          if (Array.isArray(cached.categories) && cached.categories.length > 0) {
+            seed.categories = cached.categories;
+          }
+        }
+      }
+    } catch {}
+    return seed;
   }
 
   save() {
@@ -233,11 +246,36 @@ class VapehausStore {
     this.state.products = Array.isArray(products) ? products : [];
     this._rebuildIndices();
     this.save();
+    try {
+      localStorage.setItem('VAPEHAUS_OFFLINE_CATALOG_CACHE', JSON.stringify({
+        products: this.state.products,
+        categories: this.state.categories,
+        cachedAt: Date.now(),
+      }));
+    } catch (e) {
+      // quota or private browsing
+    }
+  }
+
+  getCachedCatalog() {
+    return {
+      products: this.getProducts(),
+      categories: this.getCategories(),
+    };
   }
 
   setCategories(categories) {
     this.state.categories = Array.isArray(categories) ? categories : [];
     this.save();
+    try {
+      localStorage.setItem('VAPEHAUS_OFFLINE_CATALOG_CACHE', JSON.stringify({
+        products: this.state.products,
+        categories: this.state.categories,
+        cachedAt: Date.now(),
+      }));
+    } catch (e) {
+      // quota or private browsing
+    }
   }
 
   setOrders(orders) {

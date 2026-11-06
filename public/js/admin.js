@@ -398,7 +398,7 @@ const AdminApp = {
     }
 
     tableEl.innerHTML = topProducts.map((p) => {
-      const fallbackArt = `<div style="width: 32px; height: 32px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent2));"></div>`;
+      const fallbackArt = `<div style="width: 32px; height: 32px; border-radius: 6px; background: var(--surface3); border: 1px solid var(--line);"></div>`;
       const rawImg = p.image_url;
       const imgHtml = (rawImg ? (typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg) : null)
         ? `<img src="${typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg}" alt="${p.name}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line);" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
@@ -620,25 +620,25 @@ const AdminApp = {
 
             ${canProcess ? `
               <button class="btn btn-sm btn-cyan" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.PROCESSING}')">
-                📦 Preparing Order (Processing)
+                ${typeof Icons !== 'undefined' ? Icons.box(14) : ''} Preparing Order (Processing)
               </button>
             ` : ''}
 
             ${canShip ? `
               <button class="btn btn-sm btn-cyan" onclick="AdminApp.openShipDialog('${order.id}')">
-                🚚 Ready / Ship with Courier & Tracking #
+                ${typeof Icons !== 'undefined' ? Icons.truck(14) : ''} Ready / Ship with Courier & Tracking #
               </button>
             ` : ''}
 
             ${canDeliver ? `
               <button class="btn btn-sm" style="background: var(--success); color: #fff;" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.DELIVERED}')">
-                🎉 Complete Order (Delivered)
+                ${typeof Icons !== 'undefined' ? Icons.check(14) : ''} Complete Order (Delivered)
               </button>
             ` : ''}
 
             ${canCancel ? `
               <button class="btn btn-sm btn-danger" onclick="AdminApp.advanceStatus('${order.id}', '${OrderStatus.CANCELLED}')">
-                ✕ Cancel Order
+                ${typeof Icons !== 'undefined' ? Icons.close(14) : ''} Cancel Order
               </button>
             ` : ''}
           </div>
@@ -728,7 +728,7 @@ const AdminApp = {
     const totalUnits = variants.reduce((a, b) => a + (b.stock ?? b.stock_quantity ?? 0), 0);
     const rawImg = p.imageUrl || p.image_url;
     const imgUrl = typeof resolveMediaUrl === 'function' ? resolveMediaUrl(rawImg) : rawImg;
-    const fallbackArt = `<div style="width: 32px; height: 50px; border-radius: 6px; background: linear-gradient(160deg, ${c1}, ${c2}); flex-shrink: 0;"></div>`;
+    const fallbackArt = `<div style="width: 32px; height: 50px; border-radius: 6px; background: var(--surface3); border: 1px solid var(--line); flex-shrink: 0;"></div>`;
     const imgHtml = imgUrl
       ? `<img src="${imgUrl}" alt="${p.name}" style="width: 42px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex-shrink: 0;" onerror="this.onerror=null; this.outerHTML=\`${fallbackArt.replace(/"/g, '&quot;')}\`;">`
       : fallbackArt;
@@ -766,10 +766,10 @@ const AdminApp = {
         </td>
         <td style="text-align: right; white-space: nowrap;">
           <button class="btn btn-secondary btn-sm" style="margin-right: 6px;" onclick="AdminActionModals.openEditProduct('${p.id}')" title="Edit Product Details">
-            ✏️ Edit
+            ${typeof Icons !== 'undefined' ? Icons.edit(14) : ''} Edit
           </button>
           <button class="btn btn-danger btn-sm" onclick="AdminApp.deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')" title="Delete Product from Catalog">
-            🗑️ Delete
+            ${typeof Icons !== 'undefined' ? Icons.trash(14) : ''} Delete
           </button>
         </td>
       </tr>

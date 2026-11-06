@@ -86,7 +86,7 @@ final class PlaceOrderExecution
      * } $data
      * @return array<string, mixed>
      */
-    public function execute(string $userId, array $data): array
+    public function execute(?string $userId, array $data): array
     {
         // 1. Mandatory 18+ Age Attestation (RA 11900)
         $isAgeAttested = (bool) ($data['is_age_attested'] ?? $data['isAgeAttested'] ?? false);
@@ -94,9 +94,9 @@ final class PlaceOrderExecution
             throw new ValidationException('You must certify that you are at least 18 years of age.');
         }
 
-        // 2. Resolve User
+        // 2. Resolve Authenticated User (Enforce pure registered accounts, no guest checkout)
         $user = null;
-        if ($userId !== '' && !str_starts_with($userId, 'usr_guest_')) {
+        if (!empty($userId) && !str_starts_with($userId, 'usr_guest_')) {
             $user = $this->userRepository->findById($userId);
         }
         if ($user === null) {
@@ -105,37 +105,19 @@ final class PlaceOrderExecution
                 $user = $this->userRepository->findByEmail(strtolower(trim((string) $email)));
             }
         }
+
         if ($user === null) {
-            $user = $this->userRepository->findById('usr_customer_default');
+            throw new ValidationException('You must be signed in with an active account to checkout. Guest checkout is disabled.');
         }
 
-        if ($user !== null) {
-            $user->assertCanPurchaseVape(18);
-            $userId = $user->getId();
-        } else {
-            // Create a registered guest record to satisfy FK constraint on orders(user_id)
-            $guestId = 'usr_guest_' . bin2hex(random_bytes(6));
-            $guestEmail = strtolower(trim((string) ($data['customer_email'] ?? $data['customerEmail'] ?? "guest_{$guestId}@vapehaus.ph")));
-            $name = trim((string) ($data['customer_name'] ?? $data['customerName'] ?? 'Guest Customer'));
-            $nameParts = explode(' ', $name, 2);
-            $firstName = $nameParts[0] ?? 'Guest';
-            $lastName = $nameParts[1] ?? 'Customer';
-            $phone = trim((string) ($data['customer_phone'] ?? $data['customerPhone'] ?? '+639000000000'));
+        // 3. Enforce Statutory Age Invariant & Mandatory 18+ KYC ID Verification
+        $user->assertCanPurchaseVape(18);
 
-            $user = new User(
-                $guestId,
-                $guestEmail,
-                'GUEST_GUEST_SESSION',
-                $firstName,
-                $lastName,
-                $phone,
-                UserRole::customer(),
-                '1995-01-01',
-                true
-            );
-            $this->userRepository->save($user);
-            $userId = $guestId;
+        if (!$user->isAgeVerified()) {
+            throw new ValidationException('Age verification with a valid government ID is required before placing an order (Republic Act No. 11900).');
         }
+
+        $userId = $user->getId();
 
         // 3. Resolve shipping address
         $shippingAddress = '';

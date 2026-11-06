@@ -67,6 +67,11 @@ class VapehausApiClient {
    * so _request callers can detect server vs. network failures cleanly.
    */
   async _http(method, path, body = null) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      const err = new Error('Browser is currently offline.');
+      err.isNetworkError = true;
+      throw err;
+    }
     const url = `${this.baseUrl}${path}`;
     const opts = {
       method,
@@ -111,6 +116,17 @@ class VapehausApiClient {
       // Non-standard response — treat as server error
       return this._wrapError('INVALID_RESPONSE', 'Server returned a non-standard response.');
     } catch (err) {
+      // Offline / Network error handling: queue state mutations for background sync
+      if (typeof OfflineQueue !== 'undefined' && (method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE')) {
+        OfflineQueue.enqueue({
+          url: `${this.baseUrl}${path}`,
+          method,
+          body,
+          headers: this._getHeaders(),
+          label: `${method} ${path}`,
+        });
+      }
+
       // Network failure or non-JSON 5xx — fall back to local adapter if enabled
       const useLocal = typeof CONFIG !== 'undefined' && CONFIG.ENABLE_LOCAL_FALLBACK === true;
       if (useLocal && localFallback) {
