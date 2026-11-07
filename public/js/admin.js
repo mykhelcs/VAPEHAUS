@@ -939,6 +939,7 @@ const AdminApp = {
       const idType = k.idType || k.id_type || 'ID';
       const idNum = k.idNumber || k.id_number || '—';
       const status = (k.status || 'pending').toLowerCase();
+      const frontImg = k.frontImageUrl || k.front_image_url || '';
 
       return `
       <div class="kyc-card">
@@ -947,15 +948,22 @@ const AdminApp = {
             <h4 style="font-size: 1.1rem;">${name}</h4>
             <div style="font-size: 0.78rem; color: var(--text-muted);">${email}</div>
           </div>
-          <span class="badge ${status === 'approved' ? 'badge-success' : 'badge-warning'}">
+          <span class="badge ${status === 'approved' ? 'badge-success' : (status === 'rejected' ? 'badge-danger' : 'badge-warning')}">
             ${status.toUpperCase()}
           </span>
         </div>
-        <div style="font-size: 0.84rem;">
-          <div><b>Birth Date:</b> ${dob}</div>
-          <div><b>ID Type:</b> ${idType} (${idNum})</div>
+        <div style="font-size: 0.84rem; margin-top: 6px;">
+          <div><b>Customer Birth Date:</b> ${dob}</div>
+          <div><b>ID Type:</b> ${idType.replace('_', ' ').toUpperCase()} (${idNum})</div>
         </div>
-        <div class="kyc-id-preview">[Verified Government ID Photo Document]</div>
+        <div class="kyc-id-preview" style="margin: 10px 0; padding: 6px; background: var(--surface2); border-radius: var(--r-sm); text-align: center;">
+          ${frontImg ? `
+            <a href="${frontImg}" target="_blank" rel="noopener noreferrer" style="display: block; text-decoration: none;">
+              <img src="${frontImg}" alt="Government ID" style="max-height: 120px; max-width: 100%; border-radius: var(--r-sm); object-fit: contain; border: 1px solid var(--line);">
+              <div style="font-size: 0.72rem; color: var(--accent2); margin-top: 4px;">🔍 Click to View Full ID Photo</div>
+            </a>
+          ` : `<div style="color: var(--text-muted); font-size: 0.8rem; padding: 12px;">[No Photo Document Attached]</div>`}
+        </div>
         ${status === 'pending' ? `
           <div style="display: flex; gap: 10px; margin-top: 8px;">
             <button class="btn btn-sm btn-cyan btn-block" onclick="AdminApp.approveKyc('${k.id}')">Approve (18+)</button>
@@ -975,7 +983,7 @@ const AdminApp = {
           req.status = 'approved';
           Store.save();
         }
-        Toast.success('KYC Approved.');
+        Toast.success('KYC Approved (18+ Verified).');
         this.renderKyc();
       } else {
         Toast.error(res?.error?.message || 'Failed to approve KYC');
@@ -986,8 +994,27 @@ const AdminApp = {
   },
 
   async rejectKyc(id) {
+    const reason = prompt('Please specify rejection reason for customer notification:', 'Document unreadable or invalid format.');
+    if (reason === null) return;
+
     try {
-      const res = await Api.reviewKyc(id, 'rejected');
+      const res = await Api.reviewKyc(id, 'rejected', reason);
+      if (res && res.success) {
+        const req = (Store.getState().kycRequests || []).find((k) => k.id === id);
+        if (req) {
+          req.status = 'rejected';
+          req.rejectionReason = reason;
+          Store.save();
+        }
+        Toast.info('KYC Rejected with reason.');
+        this.renderKyc();
+      } else {
+        Toast.error(res?.error?.message || 'Failed to reject KYC');
+      }
+    } catch (err) {
+      Toast.error(err.message);
+    }
+  },
       if (res && res.success) {
         const req = (Store.getState().kycRequests || []).find((k) => k.id === id);
         if (req) {

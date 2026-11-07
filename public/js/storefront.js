@@ -472,24 +472,103 @@ const StorefrontApp = {
     } else if (tab === 'kyc') {
       const user = Store.getCurrentUser();
       const isVerified = user ? !!user.isAgeVerified : false;
+
       container.innerHTML = `
         <div style="background: var(--surface2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 24px;">
           <h4 style="margin-bottom: 8px;">Statutory 18+ Government ID Verification</h4>
           <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 20px;">
-            In compliance with Philippine vapor regulation laws (R.A. 11900), all buyers must have verified government-issued identification proving they are 18 years of age or older.
+            In compliance with Philippine vapor regulation laws (Republic Act No. 11900), all buyers must have verified government-issued identification proving they are 18 years of age or older.
           </p>
 
-          <div style="background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--r-md); padding: 24px; text-align: center; margin-bottom: 20px;">
-            <div style="margin-bottom: 8px; color: var(--accent2);">${typeof Icons !== 'undefined' ? Icons.idCard(42) : ''}</div>
-            <div style="font-weight: 600; margin-bottom: 4px;">Philippine Passport / Driver's License / UMID</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">Current Status: <b style="color: var(--success);">${isVerified ? 'VERIFIED (18+)' : 'PENDING REVIEW'}</b></div>
+          <div id="kyc-tab-content-area" style="text-align: center; padding: 20px;">
+            <div style="color: var(--text-muted); font-size: 0.9rem;">Checking verification status…</div>
           </div>
-
-          <button class="btn btn-cyan btn-sm" onclick="Toast.success('Government ID status: verified.');">
-            ✓ Verification Status Confirmed
-          </button>
         </div>
       `;
+
+      // Fetch dynamic KYC status from API
+      Api.getKycStatus().then((res) => {
+        const area = document.getElementById('kyc-tab-content-area');
+        if (!area) return;
+
+        const kyc = res && res.success ? res.data : null;
+        const status = kyc ? kyc.status : (isVerified ? 'approved' : 'none');
+
+        if (status === 'approved' || isVerified) {
+          area.innerHTML = `
+            <div style="background: var(--surface); border: 1px solid var(--success); border-radius: var(--r-md); padding: 24px; text-align: center;">
+              <div style="font-size: 2.2rem; margin-bottom: 8px;">🛡️</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: var(--success); margin-bottom: 6px;">
+                ✓ Verified 18+ Adult (R.A. 11900 Compliant)
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 440px; margin: 0 auto;">
+                Your government identification has been approved. Your account is fully unlocked for age-restricted purchases.
+              </p>
+            </div>
+          `;
+        } else if (status === 'pending') {
+          area.innerHTML = `
+            <div style="background: var(--surface); border: 1px solid var(--warning); border-radius: var(--r-md); padding: 24px; text-align: center;">
+              <div style="font-size: 2.2rem; margin-bottom: 8px;">⏳</div>
+              <div style="font-size: 1.1rem; font-weight: 700; color: var(--warning); margin-bottom: 6px;">
+                Verification Under Review
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 440px; margin: 0 auto 12px;">
+                Your government ID (<b>${kyc.idType || kyc.id_type || 'ID'}</b> - ${kyc.idNumber || kyc.id_number || ''}) was submitted and is pending verification by our compliance team.
+              </p>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">
+                Submitted: ${(kyc.createdAt || kyc.created_at || '').substring(0, 16)}
+              </div>
+            </div>
+          `;
+        } else {
+          const isRejected = (status === 'rejected');
+          area.innerHTML = `
+            ${isRejected ? `
+              <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: var(--r-md); padding: 16px; margin-bottom: 20px; text-align: left;">
+                <div style="font-weight: 700; color: var(--danger); margin-bottom: 4px;">⚠️ Verification Rejected</div>
+                <div style="font-size: 0.84rem; color: var(--text-muted);">Reason: ${kyc.rejectionReason || kyc.rejection_reason || 'Document unreadable or invalid.'}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Please re-upload a clear photo of your government ID below.</div>
+              </div>
+            ` : ''}
+
+            <form onsubmit="event.preventDefault(); StorefrontApp.submitKycIdDocument();" style="text-align: left;">
+              <div class="form-group" style="margin-bottom: 14px;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px;">Select Valid Government ID Type</label>
+                <select id="kyc-id-type" class="form-control" style="width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--text);">
+                  <option value="drivers_license">Philippine Driver's License</option>
+                  <option value="passport">Philippine Passport</option>
+                  <option value="national_id">PhilSys National ID</option>
+                  <option value="umid">Unified Multi-Purpose ID (UMID)</option>
+                  <option value="postal_id">Postal ID</option>
+                  <option value="prc_id">PRC Professional ID</option>
+                  <option value="voter_id">Voter's ID</option>
+                  <option value="sss_id">SSS ID</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 14px;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px;">Government ID Number</label>
+                <input type="text" id="kyc-id-number" class="form-control" placeholder="e.g. N01-23-456789" required style="width: 100%; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--text);">
+              </div>
+
+              <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px;">Upload Front Photo of ID (JPEG / PNG / WEBP, Max 5MB)</label>
+                <input type="file" id="kyc-id-file-input" accept="image/jpeg,image/png,image/webp" required style="width: 100%; padding: 8px; background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--r-sm); color: var(--text);">
+              </div>
+
+              <button type="submit" class="btn btn-cyan btn-block" id="btn-upload-kyc">
+                📤 Submit ID for 18+ Verification
+              </button>
+            </form>
+          `;
+        }
+      }).catch(() => {
+        const area = document.getElementById('kyc-tab-content-area');
+        if (area) {
+          area.innerHTML = `<div style="color: var(--danger); font-size: 0.85rem;">Failed to retrieve verification status. Please try again later.</div>`;
+        }
+      });
     }
   },
 
@@ -525,9 +604,20 @@ const StorefrontApp = {
     OrderTrackerModal.showOrder(orderId);
   },
 
-    async submitKycIdDocument() {
+  async submitKycIdDocument() {
     const fileInput = document.getElementById('kyc-id-file-input');
+    const idTypeSelect = document.getElementById('kyc-id-type');
+    const idNumberInput = document.getElementById('kyc-id-number');
     const btn = document.getElementById('btn-upload-kyc');
+
+    const idType = idTypeSelect ? idTypeSelect.value : 'drivers_license';
+    const idNumber = idNumberInput ? idNumberInput.value.trim() : '';
+
+    if (!idNumber || idNumber.length < 3) {
+      Toast.error('Please enter a valid government ID number (at least 3 characters).');
+      return;
+    }
+
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
       Toast.error('Please select an ID image file to upload.');
       return;
@@ -539,10 +629,16 @@ const StorefrontApp = {
       Toast.error('Please sign in first before uploading identification.');
       return;
     }
-    if (btn) { btn.disabled = true; btn.textContent = 'Uploading ID…'; }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Uploading ID & Submitting…';
+    }
 
     try {
       let fileUrl = '';
+
+      // Direct client Supabase upload if available
       if (typeof window.supabase !== 'undefined' && CONFIG.SUPABASE_URL && !CONFIG.SUPABASE_URL.includes('YOUR-PROJECT-REF')) {
         try {
           const sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
@@ -553,12 +649,13 @@ const StorefrontApp = {
             fileUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/kyc-documents/${data.path}`;
           }
         } catch (e) {
-          console.warn('Supabase storage direct upload fallback to backend upload', e);
+          console.warn('Supabase direct upload fallback to backend KYC upload', e);
         }
       }
 
+      // Backend KYC document upload endpoint
       if (!fileUrl) {
-        const uploadRes = await Api.uploadProductImage(file);
+        const uploadRes = await Api.uploadKycDocument(file);
         if (uploadRes && uploadRes.success && uploadRes.data && uploadRes.data.url) {
           fileUrl = uploadRes.data.url;
         } else {
@@ -566,20 +663,25 @@ const StorefrontApp = {
         }
       }
 
-      await Api.submitKyc({
+      const res = await Api.submitKyc({
         frontImageUrl: fileUrl,
-        idType: 'drivers_license',
-        idNumber: 'D01-99-XXXXXX',
+        idType,
+        idNumber,
       });
 
-      Toast.success('Government ID submitted successfully for review!');
-      user.isAgeVerified = true;
-      Store.save();
-      this.showAccountTab('kyc');
+      if (res && res.success) {
+        Toast.success('Government ID submitted successfully! Awaiting verification.');
+        this.showAccountTab('kyc');
+      } else {
+        throw new Error(res?.error?.message || 'Failed to submit KYC verification.');
+      }
     } catch (err) {
       Toast.error(err.message || 'Failed to upload document.');
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '📤 Upload Identification Document'; }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '📤 Submit ID for 18+ Verification';
+      }
     }
   },
 

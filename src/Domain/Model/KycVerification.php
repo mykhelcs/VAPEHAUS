@@ -18,6 +18,20 @@ final class KycVerification
     public const TYPE_NATIONAL_ID = 'national_id';
     public const TYPE_UMID = 'umid';
     public const TYPE_POSTAL_ID = 'postal_id';
+    public const TYPE_PRC_ID = 'prc_id';
+    public const TYPE_VOTER_ID = 'voter_id';
+    public const TYPE_SSS_ID = 'sss_id';
+
+    public const ALLOWED_TYPES = [
+        self::TYPE_DRIVERS_LICENSE,
+        self::TYPE_PASSPORT,
+        self::TYPE_NATIONAL_ID,
+        self::TYPE_UMID,
+        self::TYPE_POSTAL_ID,
+        self::TYPE_PRC_ID,
+        self::TYPE_VOTER_ID,
+        self::TYPE_SSS_ID,
+    ];
 
     private string $id;
     private string $userId;
@@ -46,11 +60,21 @@ final class KycVerification
         $idNumber = trim($idNumber);
         $frontImageUrl = trim($frontImageUrl);
 
-        if ($idNumber === '') {
-            throw new ValidationException('ID Number is required.');
+        if (!in_array($idType, self::ALLOWED_TYPES, true)) {
+            throw new ValidationException("Invalid ID type '{$idType}'. Allowed: " . implode(', ', self::ALLOWED_TYPES));
+        }
+        if ($idNumber === '' || strlen($idNumber) < 3) {
+            throw new ValidationException('ID Number is required and must be at least 3 characters.');
         }
         if ($frontImageUrl === '') {
             throw new ValidationException('Front ID photo is required.');
+        }
+        if (
+            str_starts_with($frontImageUrl, 'javascript:')
+            || str_starts_with($frontImageUrl, 'data:text')
+            || (!preg_match('#^(https?://|/?uploads/|[a-zA-Z0-9_\-\./]+)#i', $frontImageUrl))
+        ) {
+            throw new ValidationException('Front ID photo must be a valid image URL or uploaded file path.');
         }
 
         $this->id = $id;
@@ -65,6 +89,30 @@ final class KycVerification
         $this->rejectionReason = $rejectionReason;
         $this->verifiedAt = $verifiedAt;
         $this->createdAt = $createdAt ?? (new DateTimeImmutable())->format('Y-m-d H:i:s');
+    }
+
+    public function updateSubmission(string $idType, string $idNumber, string $frontImageUrl, ?string $backImageUrl = null): void
+    {
+        $idType = strtolower(trim($idType));
+        if (!in_array($idType, self::ALLOWED_TYPES, true)) {
+            throw new ValidationException("Invalid ID type '{$idType}'. Allowed: " . implode(', ', self::ALLOWED_TYPES));
+        }
+        $idNumber = trim($idNumber);
+        if ($idNumber === '' || strlen($idNumber) < 3) {
+            throw new ValidationException('ID Number is required.');
+        }
+        $frontImageUrl = trim($frontImageUrl);
+        if ($frontImageUrl === '') {
+            throw new ValidationException('Front ID photo is required.');
+        }
+
+        $this->idType = $idType;
+        $this->idNumber = $idNumber;
+        $this->frontImageUrl = $frontImageUrl;
+        $this->backImageUrl = $backImageUrl ? trim($backImageUrl) : null;
+        $this->status = self::STATUS_PENDING;
+        $this->rejectionReason = null;
+        $this->verifiedAt = null;
     }
 
     public function getId(): string

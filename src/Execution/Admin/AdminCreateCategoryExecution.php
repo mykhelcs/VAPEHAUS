@@ -7,14 +7,17 @@ namespace Vapehaus\Execution\Admin;
 use Vapehaus\Domain\Exception\ValidationException;
 use Vapehaus\Domain\Model\Category;
 use Vapehaus\Domain\Repository\CategoryRepositoryInterface;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 
 final class AdminCreateCategoryExecution
 {
     private CategoryRepositoryInterface $categoryRepository;
+    private ?CacheInterface $cache;
 
-    public function __construct(CategoryRepositoryInterface $categoryRepository)
+    public function __construct(CategoryRepositoryInterface $categoryRepository, ?CacheInterface $cache = null)
     {
         $this->categoryRepository = $categoryRepository;
+        $this->cache = $cache;
     }
 
     /**
@@ -46,6 +49,10 @@ final class AdminCreateCategoryExecution
         );
 
         $this->categoryRepository->save($category);
+
+        if ($this->cache !== null) {
+            $this->cache->invalidateTags(['catalog', 'categories', 'facets']);
+        }
 
         return $category->toArray();
     }

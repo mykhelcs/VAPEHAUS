@@ -2,8 +2,8 @@
     "email": "direct@example.com",
     "otp": "654321",
     "purpose": "registration",
-    "expires_at": 1793975705,
+    "expires_at": 1794037082,
     "consumed": true,
-    "created_at": 1793975105,
-    "consumed_at": 1793975105
+    "created_at": 1794036482,
+    "consumed_at": 1794036482
 }

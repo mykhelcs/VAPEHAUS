@@ -8,18 +8,22 @@ use Vapehaus\Domain\Exception\EntityNotFoundException;
 use Vapehaus\Domain\Exception\ValidationException;
 use Vapehaus\Domain\Repository\CategoryRepositoryInterface;
 use Vapehaus\Domain\Repository\ProductRepositoryInterface;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 
 final class AdminUpdateProductExecution
 {
     private ProductRepositoryInterface $productRepository;
     private CategoryRepositoryInterface $categoryRepository;
+    private ?CacheInterface $cache;
 
     public function __construct(
         ProductRepositoryInterface $productRepository,
-        CategoryRepositoryInterface $categoryRepository
+        CategoryRepositoryInterface $categoryRepository,
+        ?CacheInterface $cache = null
     ) {
         $this->productRepository = $productRepository;
         $this->categoryRepository = $categoryRepository;
+        $this->cache = $cache;
     }
 
     /**
@@ -101,6 +105,10 @@ final class AdminUpdateProductExecution
         }
 
         $this->productRepository->save($product);
+
+        if ($this->cache !== null) {
+            $this->cache->invalidateTags(['catalog', 'products', 'facets']);
+        }
 
         return $product->toArray();
     }

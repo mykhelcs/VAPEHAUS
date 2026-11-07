@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Vapehaus\Execution\Catalog;
 
 use PDO;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 use Vapehaus\Infrastructure\Database\DatabaseConnection;
 
 final class GetCatalogFacetsExecution
 {
     private PDO $pdo;
+    private ?CacheInterface $cache;
 
-    public function __construct(?PDO $pdo = null)
+    public function __construct(?PDO $pdo = null, ?CacheInterface $cache = null)
     {
         $this->pdo = $pdo ?? DatabaseConnection::getPdo();
+        $this->cache = $cache;
     }
 
     /**
@@ -26,6 +29,13 @@ final class GetCatalogFacetsExecution
      */
     public function execute(): array
     {
+        if ($this->cache !== null && $this->cache->has('catalog:facets')) {
+            /** @var array{categories: array<int, array{id: string, name: string, count: int}>, brands: array<int, array{brand: string, count: int}>, nicotine_strengths: array<int, array{nicotine: string, count: int}>, price_range: array{min: float, max: float}} $cached */
+            $cached = $this->cache->get('catalog:facets');
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
         // 1. Categories with active product counts
         $catStmt = $this->pdo->query('SELECT c.id, c.name, COUNT(p.id) as count
             FROM categories c
@@ -71,7 +81,7 @@ final class GetCatalogFacetsExecution
         $priceStmt = $this->pdo->query('SELECT COALESCE(MIN(price), 0) as min_p, COALESCE(MAX(price), 0) as max_p FROM product_variants WHERE is_active = 1');
         $pRange = $priceStmt->fetch();
 
-        return [
+        $result = [
             'categories' => $categories,
             'brands' => $brands,
             'nicotine_strengths' => $nicotineStrengths,
@@ -80,5 +90,11 @@ final class GetCatalogFacetsExecution
                 'max' => (float) ($pRange['max_p'] ?? 0),
             ],
         ];
+
+        if ($this->cache !== null) {
+            $this->cache->set('catalog:facets', $result, 300, ['catalog', 'facets']);
+        }
+
+        return $result;
     }
 }

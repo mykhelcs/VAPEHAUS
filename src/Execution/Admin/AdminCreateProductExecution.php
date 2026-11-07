@@ -13,18 +13,22 @@ use Vapehaus\Domain\Repository\ProductRepositoryInterface;
 use Vapehaus\Domain\ValueObject\Money;
 use Vapehaus\Domain\ValueObject\NicotineStrength;
 use Vapehaus\Domain\ValueObject\Sku;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 
 final class AdminCreateProductExecution
 {
     private ProductRepositoryInterface $productRepository;
     private CategoryRepositoryInterface $categoryRepository;
+    private ?CacheInterface $cache;
 
     public function __construct(
         ProductRepositoryInterface $productRepository,
-        CategoryRepositoryInterface $categoryRepository
+        CategoryRepositoryInterface $categoryRepository,
+        ?CacheInterface $cache = null
     ) {
         $this->productRepository = $productRepository;
         $this->categoryRepository = $categoryRepository;
+        $this->cache = $cache;
     }
 
     /**
@@ -124,6 +128,10 @@ final class AdminCreateProductExecution
             );
             $this->productRepository->saveVariant($variant);
             $product->addVariant($variant);
+        }
+
+        if ($this->cache !== null) {
+            $this->cache->invalidateTags(['catalog', 'products', 'facets']);
         }
 
         return $product->toArray();

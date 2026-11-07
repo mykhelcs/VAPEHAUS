@@ -74,4 +74,17 @@ class DesignSystemConstraintTest extends TestCase
         $this->assertTrue(str_contains($content, 'search'), 'Icons must define search icon');
         $this->assertTrue(str_contains($content, 'user'), 'Icons must define user icon');
     }
+
+    public function testLogoPngFileExistsAndIsValidPng(): void
+    {
+        $pngPath = $this->publicDir . '/images/logo.png';
+        $this->assertTrue(file_exists($pngPath), "logo.png must exist at {$pngPath}");
+
+        $content = (string) file_get_contents($pngPath);
+        // Standard PNG 8-byte signature: 0x89 P N G 0x0D 0x0A 0x1A 0x0A
+        $pngHeader = substr($content, 0, 8);
+        $expectedHeader = "\x89PNG\x0D\x0A\x1A\x0A";
+        $this->assertEquals($expectedHeader, $pngHeader, 'logo.png must have valid PNG magic bytes header');
+        $this->assertTrue(strlen($content) > 100, 'logo.png must not be empty');
+    }
 }

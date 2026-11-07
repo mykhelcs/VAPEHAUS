@@ -6,14 +6,17 @@ namespace Vapehaus\Execution\Admin;
 
 use Vapehaus\Domain\Exception\EntityNotFoundException;
 use Vapehaus\Domain\Repository\ProductRepositoryInterface;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 
 final class AdminDeleteProductExecution
 {
     private ProductRepositoryInterface $productRepository;
+    private ?CacheInterface $cache;
 
-    public function __construct(ProductRepositoryInterface $productRepository)
+    public function __construct(ProductRepositoryInterface $productRepository, ?CacheInterface $cache = null)
     {
         $this->productRepository = $productRepository;
+        $this->cache = $cache;
     }
 
     /**
@@ -27,6 +30,10 @@ final class AdminDeleteProductExecution
         }
 
         $this->productRepository->delete($id);
+
+        if ($this->cache !== null) {
+            $this->cache->invalidateTags(['catalog', 'products', 'facets']);
+        }
 
         return [
             'id' => $id,

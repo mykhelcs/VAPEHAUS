@@ -36,6 +36,7 @@ use Vapehaus\Execution\Catalog\ListCategoriesExecution;
 use Vapehaus\Execution\Catalog\ListProductsExecution;
 use Vapehaus\Execution\Coupon\CouponExecution;
 use Vapehaus\Execution\Kyc\KycExecution;
+use Vapehaus\Execution\Kyc\UploadKycDocumentExecution;
 use Vapehaus\Execution\Order\AdminShipOrderExecution;
 use Vapehaus\Execution\Order\CancelOrderExecution;
 use Vapehaus\Execution\Order\GetOrderDetailExecution;
@@ -47,6 +48,9 @@ use Vapehaus\Execution\Payment\PaymentExecution;
 use Vapehaus\Execution\Review\ReviewExecution;
 use Vapehaus\Execution\Rma\RmaExecution;
 use Vapehaus\Execution\Wishlist\WishlistExecution;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
+use Vapehaus\Infrastructure\Cache\FileCache;
+use Vapehaus\Infrastructure\Cache\InMemoryCache;
 use Vapehaus\Infrastructure\Database\DatabaseConnection;
 use Vapehaus\Infrastructure\Database\SchemaManager;
 use Vapehaus\Infrastructure\Environment\Env;
@@ -90,6 +94,7 @@ use Vapehaus\Presentation\Http\Request;
 use Vapehaus\Presentation\Http\Response;
 use Vapehaus\Presentation\Response\ApiResponse;
 use Vapehaus\Presentation\Middleware\AuthMiddleware;
+use Vapehaus\Presentation\Middleware\HttpCacheMiddleware;
 use Vapehaus\Presentation\Middleware\RateLimiterMiddleware;
 use Vapehaus\Presentation\Middleware\RequireRoleMiddleware;
 use Vapehaus\Presentation\Router\Router;
@@ -98,10 +103,12 @@ final class App
 {
     private Router $router;
     private PDO $pdo;
+    private CacheInterface $cache;
 
-    public function __construct(?PDO $pdo = null, bool $ensureSchema = false)
+    public function __construct(?PDO $pdo = null, bool $ensureSchema = false, ?CacheInterface $cache = null)
     {
         $this->pdo = $pdo ?? DatabaseConnection::getPdo();
+        $this->cache = $cache ?? ($this->isInMemorySqlite($this->pdo) ? new InMemoryCache() : new FileCache());
         
         // Runtime schema initialization removed for production.
         // Pure Supabase PostgreSQL: all tables & accounts live in Supabase.
@@ -112,6 +119,11 @@ final class App
 
         $this->router = new Router();
         $this->registerRoutes();
+    }
+
+    public function getCache(): CacheInterface
+    {
+        return $this->cache;
     }
 
     private function isInMemorySqlite(PDO $pdo): bool
@@ -158,6 +170,7 @@ final class App
         $adminOnly = new RequireRoleMiddleware('admin');
         $rateLimiter = new RateLimiterMiddleware(120, 60);
         $authRateLimiter = new RateLimiterMiddleware(5, 60); // 5 attempts per minute (Audit spec)
+        $httpCache = new HttpCacheMiddleware(120);
 
         // Executions
         $sendOtpExec = new SendOtpExecution($otpRepo, $smtpMailer, $userRepo);
@@ -168,10 +181,10 @@ final class App
         $logoutExec = new LogoutUserExecution($sessionRepo);
         $profileExec = new GetProfileExecution($userRepo);
 
-        $listCategoriesExec = new ListCategoriesExecution($categoryRepo);
-        $listProductsExec = new ListProductsExecution($productRepo);
-        $productDetailExec = new GetProductDetailExecution($productRepo);
-        $facetsExec = new GetCatalogFacetsExecution($this->pdo);
+        $listCategoriesExec = new ListCategoriesExecution($categoryRepo, $this->cache);
+        $listProductsExec = new ListProductsExecution($productRepo, $this->cache);
+        $productDetailExec = new GetProductDetailExecution($productRepo, $this->cache);
+        $facetsExec = new GetCatalogFacetsExecution($this->pdo, $this->cache);
 
         $getCartExec = new GetCartExecution($cartRepo, $productRepo);
         $addToCartExec = new AddToCartExecution($cartRepo, $productRepo);
@@ -198,6 +211,8 @@ final class App
         $couponExec = new CouponExecution($couponRepo, $cartRepo, $productRepo);
         $reviewExec = new ReviewExecution($reviewRepo, $productRepo, $orderRepo);
         $kycExec = new KycExecution($kycRepo, $userRepo, $notifService);
+        $supabaseStorage = new SupabaseStorageAdapter();
+        $uploadKycExec = new UploadKycDocumentExecution($supabaseStorage);
         $rmaExec = new RmaExecution($returnRepo, $orderRepo, $productRepo);
         $wishlistExec = new WishlistExecution($wishlistRepo, $productRepo);
         $paymentExec = new PaymentExecution($paymentRepo, $orderRepo, $productRepo, $auditRepo);
@@ -207,15 +222,14 @@ final class App
         $createCheckoutSessionExec = new CreateCheckoutSessionExecution($paymongoGateway, $orderRepo);
 
         $adminDashboardExec = new AdminGetDashboardExecution($orderRepo, $userRepo, $productRepo, $kycRepo, $this->pdo);
-        $adminDeleteProductExec = new AdminDeleteProductExecution($productRepo);
-        $supabaseStorage = new SupabaseStorageAdapter();
+        $adminDeleteProductExec = new AdminDeleteProductExecution($productRepo, $this->cache);
         $uploadImageExec = new UploadProductImageExecution($supabaseStorage);
         $checkDbHealthExec = new CheckDatabaseHealthExecution($this->pdo);
-        $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo);
-        $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo);
-        $adminUpdateProductExec = new AdminUpdateProductExecution($productRepo, $categoryRepo);
-        $adminVariantExec = new AdminCreateVariantExecution($productRepo);
-        $adminStockExec = new AdminUpdateStockExecution($productRepo);
+        $adminCategoryExec = new AdminCreateCategoryExecution($categoryRepo, $this->cache);
+        $adminProductExec = new AdminCreateProductExecution($productRepo, $categoryRepo, $this->cache);
+        $adminUpdateProductExec = new AdminUpdateProductExecution($productRepo, $categoryRepo, $this->cache);
+        $adminVariantExec = new AdminCreateVariantExecution($productRepo, $this->cache);
+        $adminStockExec = new AdminUpdateStockExecution($productRepo, $this->cache);
         $adminOrdersExec = new AdminListOrdersExecution($orderRepo);
         $adminStatusExec = new AdminUpdateOrderStatusExecution($orderRepo, $productRepo);
         $adminCustomersExec = new AdminListCustomersExecution($userRepo);
@@ -237,7 +251,7 @@ final class App
         $addressController = new AddressController($addressExec);
         $couponController = new CouponController($couponExec);
         $reviewController = new ReviewController($reviewExec);
-        $kycController = new KycController($kycExec);
+        $kycController = new KycController($kycExec, $uploadKycExec);
         $rmaController = new RmaController($rmaExec);
         $wishlistController = new WishlistController($wishlistExec);
         $paymentController = new PaymentWebhookController($paymentExec, $paymongoGateway);
@@ -300,6 +314,7 @@ final class App
         $this->router->post('/api/v1/kyc', fn (Request $r) => $kycController->submit($r), [$authRequired]);
         $this->router->get('/api/v1/user/kyc', fn (Request $r) => $kycController->getStatus($r), [$authRequired]);
         $this->router->post('/api/v1/user/kyc/submit', fn (Request $r) => $kycController->submit($r), [$authRequired]);
+        $this->router->post('/api/v1/user/kyc/upload', fn (Request $r) => $kycController->upload($r), [$authRequired]);
 
         // 4. Warranty & Returns (RMA) Endpoints
         $this->router->post('/api/v1/user/orders/{id}/returns', fn (Request $r) => $rmaController->create($r), [$authRequired]);
@@ -311,10 +326,10 @@ final class App
         $this->router->post('/api/v1/products/variants/{variantId}/restock-alert', fn (Request $r, array $p) => $wishlistController->subscribeRestock($r, $p), [$authRequired]);
 
         // 6. Public Catalog & Facets
-        $this->router->get('/api/v1/categories', fn (Request $r) => $catalogController->getCategories($r));
-        $this->router->get('/api/v1/products', fn (Request $r) => $catalogController->getProducts($r));
-        $this->router->get('/api/v1/products/facets', fn (Request $r) => $catalogController->getFacets($r));
-        $this->router->get('/api/v1/products/{identifier}', fn (Request $r, array $p) => $catalogController->getProductDetail($r, $p));
+        $this->router->get('/api/v1/categories', fn (Request $r) => $catalogController->getCategories($r), [$httpCache]);
+        $this->router->get('/api/v1/products', fn (Request $r) => $catalogController->getProducts($r), [$httpCache]);
+        $this->router->get('/api/v1/products/facets', fn (Request $r) => $catalogController->getFacets($r), [$httpCache]);
+        $this->router->get('/api/v1/products/{identifier}', fn (Request $r, array $p) => $catalogController->getProductDetail($r, $p), [$httpCache]);
 
         // 7. Verified Reviews
         $this->router->get('/api/v1/products/{productId}/reviews', fn (Request $r, array $p) => $reviewController->listForProduct($r, $p));

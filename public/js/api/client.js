@@ -706,6 +706,35 @@ class VapehausApiClient {
 
   // ── REGULATORY KYC (RA 11900) ────────────────────────────────────────
 
+  async uploadKycDocument(fileOrBase64) {
+    let base64Data = fileOrBase64;
+    let filename = 'id_document.jpg';
+    if (fileOrBase64 instanceof Blob || fileOrBase64 instanceof File) {
+      filename = fileOrBase64.name || 'id_document.jpg';
+      base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(fileOrBase64);
+      });
+    }
+
+    return this._request(
+      'POST',
+      '/user/kyc/upload',
+      {
+        image_data: base64Data,
+        filename,
+      },
+      async () => {
+        return this._wrapSuccess({
+          url: typeof base64Data === 'string' && base64Data.startsWith('data:') ? base64Data : 'uploads/kyc/' + filename,
+          filename,
+        }, {}, 201);
+      }
+    );
+  }
+
   async submitKyc(kycPayload) {
     return this._request('POST', '/kyc', kycPayload, async () => {
       const id = 'kyc_' + Math.random().toString(36).substring(2, 8);

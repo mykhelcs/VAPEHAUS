@@ -19,6 +19,11 @@ use Vapehaus\Tests\Unit\Execution\DatabaseHealthExecutionTest;
 use Vapehaus\Tests\Unit\Execution\Order\PlaceOrderExecutionTest;
 use Vapehaus\Tests\Unit\HmacOtpRepositoryTest;
 use Vapehaus\Tests\Unit\CheckoutAuthAndKycConstraintTest;
+use Vapehaus\Tests\Unit\Execution\Kyc\KycExecutionTest;
+use Vapehaus\Tests\Integration\Api\KycApiSecurityTest;
+use Vapehaus\Tests\Unit\Infrastructure\Cache\CacheStoreTest;
+use Vapehaus\Tests\Unit\Execution\Catalog\CachedCatalogExecutionTest;
+use Vapehaus\Tests\Integration\Api\HttpCacheHeadersTest;
 use Vapehaus\Tests\Unit\PayMongoGatewayTest;
 use Vapehaus\Tests\Unit\RootRoutingTest;
 
@@ -26,6 +31,11 @@ $testClasses = [
     CheckoutAuthAndKycConstraintTest::class,
     RootRoutingTest::class,
     DesignSystemConstraintTest::class,
+    CacheStoreTest::class,
+    CachedCatalogExecutionTest::class,
+    HttpCacheHeadersTest::class,
+    KycExecutionTest::class,
+    KycApiSecurityTest::class,
     DomainTest::class,
     ExecutionTest::class,
     HmacOtpRepositoryTest::class,

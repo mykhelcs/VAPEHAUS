@@ -48,13 +48,22 @@ final class UploadProductImageExecution
         }
 
         $decoded = base64_decode($imageData, true);
-        if ($decoded === false) {
+        if ($decoded === false || strlen($decoded) === 0) {
             throw new ValidationException('Invalid base64 encoded image payload.');
         }
 
         $fileSize = strlen($decoded);
         if ($fileSize > 5 * 1024 * 1024) {
             throw new ValidationException('Image exceeds the maximum allowed size of 5MB.');
+        }
+
+        // Verify image magic bytes header or format
+        $isJpeg = str_starts_with($decoded, "\xFF\xD8\xFF");
+        $isPng = str_starts_with($decoded, "\x89PNG\x0D\x0A\x1A\x0A");
+        $isWebp = (str_starts_with($decoded, "RIFF") && str_contains(substr($decoded, 0, 16), "WEBP")) || str_contains($decoded, 'webp');
+
+        if (!$isJpeg && !$isPng && !$isWebp) {
+            throw new ValidationException('Uploaded file is not a valid JPEG, PNG, or WEBP image.');
         }
 
         $rawFilename = $payload['filename'] ?? null;

@@ -34,7 +34,7 @@ final class CatalogController
     public function getCategories(Request $request): Response
     {
         $categories = $this->categoriesExecution->execute(true);
-        return ApiResponse::success($categories);
+        return ApiResponse::cached($request, $categories, [], 300);
     }
 
     public function getProducts(Request $request): Response
@@ -42,11 +42,11 @@ final class CatalogController
         $filters = $request->getQueryParams();
         $result = $this->productsExecution->execute($filters);
 
-        return ApiResponse::success($result['products'], [
+        return ApiResponse::cached($request, $result['products'], [
             'total' => $result['total'],
             'page' => $result['page'],
             'limit' => $result['limit'],
-        ]);
+        ], 120);
     }
 
     public function getFacets(Request $request): Response
@@ -55,7 +55,7 @@ final class CatalogController
             return ApiResponse::success([]);
         }
         $facets = $this->facetsExecution->execute();
-        return ApiResponse::success($facets);
+        return ApiResponse::cached($request, $facets, [], 300);
     }
 
     /**
@@ -64,6 +64,6 @@ final class CatalogController
     public function getProductDetail(Request $request, array $params): Response
     {
         $product = $this->productDetailExecution->execute($params['identifier']);
-        return ApiResponse::success($product);
+        return ApiResponse::cached($request, $product, [], 180);
     }
 }

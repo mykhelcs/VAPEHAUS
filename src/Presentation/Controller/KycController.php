@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Vapehaus\Presentation\Controller;
 
 use Vapehaus\Execution\Kyc\KycExecution;
+use Vapehaus\Execution\Kyc\UploadKycDocumentExecution;
 use Vapehaus\Presentation\Http\Request;
 use Vapehaus\Presentation\Http\Response;
 use Vapehaus\Presentation\Response\ApiResponse;
@@ -12,10 +13,25 @@ use Vapehaus\Presentation\Response\ApiResponse;
 final class KycController
 {
     private KycExecution $execution;
+    private ?UploadKycDocumentExecution $uploadExecution;
 
-    public function __construct(KycExecution $execution)
-    {
+    public function __construct(
+        KycExecution $execution,
+        ?UploadKycDocumentExecution $uploadExecution = null
+    ) {
         $this->execution = $execution;
+        $this->uploadExecution = $uploadExecution;
+    }
+
+    public function upload(Request $request): Response
+    {
+        $userId = (string) $request->getAttribute('userId');
+        if ($this->uploadExecution === null) {
+            $this->uploadExecution = new UploadKycDocumentExecution();
+        }
+
+        $result = $this->uploadExecution->execute($userId, $request->getBody());
+        return ApiResponse::success($result, [], 201);
     }
 
     public function submit(Request $request): Response

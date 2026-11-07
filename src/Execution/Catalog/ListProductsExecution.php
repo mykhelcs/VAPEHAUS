@@ -6,14 +6,17 @@ namespace Vapehaus\Execution\Catalog;
 
 use Vapehaus\Domain\Model\Product;
 use Vapehaus\Domain\Repository\ProductRepositoryInterface;
+use Vapehaus\Infrastructure\Cache\CacheInterface;
 
 final class ListProductsExecution
 {
     private ProductRepositoryInterface $productRepository;
+    private ?CacheInterface $cache;
 
-    public function __construct(ProductRepositoryInterface $productRepository)
+    public function __construct(ProductRepositoryInterface $productRepository, ?CacheInterface $cache = null)
     {
         $this->productRepository = $productRepository;
+        $this->cache = $cache;
     }
 
     /**
@@ -50,15 +53,32 @@ final class ListProductsExecution
         ];
 
         $criteria = array_filter($criteria, fn ($val) => $val !== null && $val !== '');
+        ksort($criteria);
+
+        $cacheKey = 'catalog:products:' . md5(json_encode(['c' => $criteria, 'p' => $page, 'l' => $limit]));
+
+        if ($this->cache !== null && $this->cache->has($cacheKey)) {
+            /** @var array{products: array<int, array<string, mixed>>, total: int, page: int, limit: int} $cached */
+            $cached = $this->cache->get($cacheKey);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        }
 
         $products = $this->productRepository->search($criteria, $limit, $offset);
         $total = $this->productRepository->countSearch($criteria);
 
-        return [
+        $result = [
             'products' => array_map(fn (Product $p) => $p->toArray(), $products),
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
         ];
+
+        if ($this->cache !== null) {
+            $this->cache->set($cacheKey, $result, 300, ['catalog', 'products']);
+        }
+
+        return $result;
     }
 }

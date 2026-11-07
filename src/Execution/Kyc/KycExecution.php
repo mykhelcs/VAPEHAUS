@@ -29,10 +29,14 @@ final class KycExecution
 
     /**
      * @param array{
-     *     id_type: string,
-     *     id_number: string,
-     *     front_image_url: string,
-     *     back_image_url?: ?string
+     *     id_type?: string,
+     *     idType?: string,
+     *     id_number?: string,
+     *     idNumber?: string,
+     *     front_image_url?: string,
+     *     frontImageUrl?: string,
+     *     back_image_url?: ?string,
+     *     backImageUrl?: ?string
      * } $data
      * @return array<string, mixed>
      */
@@ -43,14 +47,36 @@ final class KycExecution
             throw new EntityNotFoundException('User', $userId);
         }
 
+        if ($user->isAgeVerified()) {
+            throw new ValidationException('Your government ID is already verified (18+ compliant).');
+        }
+
+        $idType = (string) ($data['id_type'] ?? $data['idType'] ?? KycVerification::TYPE_DRIVERS_LICENSE);
+        $idNumber = (string) ($data['id_number'] ?? $data['idNumber'] ?? '');
+        $frontImageUrl = (string) ($data['front_image_url'] ?? $data['frontImageUrl'] ?? '');
+        $backImageUrl = $data['back_image_url'] ?? $data['backImageUrl'] ?? null;
+
+        // Check if there is an existing pending submission; update it to prevent duplicate queue flooding
+        $latest = $this->kycRepo->findLatestByUserId($userId);
+        if ($latest !== null && $latest->getStatus() === KycVerification::STATUS_PENDING) {
+            $latest->updateSubmission(
+                $idType,
+                $idNumber,
+                $frontImageUrl,
+                $backImageUrl ? (string) $backImageUrl : null
+            );
+            $this->kycRepo->save($latest);
+            return $latest->toArray();
+        }
+
         $id = 'kyc_' . bin2hex(random_bytes(6));
         $kyc = new KycVerification(
             $id,
             $userId,
-            $data['id_type'] ?? 'drivers_license',
-            $data['id_number'] ?? '',
-            $data['front_image_url'] ?? '',
-            $data['back_image_url'] ?? null,
+            $idType,
+            $idNumber,
+            $frontImageUrl,
+            $backImageUrl ? (string) $backImageUrl : null,
             KycVerification::STATUS_PENDING
         );
 
@@ -110,6 +136,27 @@ final class KycExecution
     public function adminList(array $filters = []): array
     {
         $kycs = $this->kycRepo->findAll($filters);
-        return array_map(fn (KycVerification $k) => $k->toArray(), $kycs);
+        $result = [];
+
+        foreach ($kycs as $k) {
+            $item = $k->toArray();
+            $user = $this->userRepo->findById($k->getUserId());
+            if ($user !== null) {
+                $item['customer_name'] = $user->getFullName();
+                $item['customer_email'] = $user->getEmail()->getValue();
+                $item['customer_phone'] = $user->getPhone();
+                $item['birth_date'] = $user->getBirthDate();
+                $item['is_age_verified'] = $user->isAgeVerified();
+            } else {
+                $item['customer_name'] = 'Customer';
+                $item['customer_email'] = '';
+                $item['customer_phone'] = null;
+                $item['birth_date'] = null;
+                $item['is_age_verified'] = false;
+            }
+            $result[] = $item;
+        }
+
+        return $result;
     }
 }

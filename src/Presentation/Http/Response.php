@@ -45,6 +45,48 @@ final class Response
         return $this->body;
     }
 
+    public function withHeader(string $name, string $value): self
+    {
+        $headers = $this->headers;
+        $headers[$name] = $value;
+        return new self($this->statusCode, $headers, $this->body);
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    public function withHeaders(array $headers): self
+    {
+        $merged = array_merge($this->headers, $headers);
+        return new self($this->statusCode, $merged, $this->body);
+    }
+
+    public function getHeader(string $name): ?string
+    {
+        $lowerName = strtolower($name);
+        foreach ($this->headers as $k => $v) {
+            if (strtolower($k) === $lowerName) {
+                return $v;
+            }
+        }
+        return null;
+    }
+
+    public function hasHeader(string $name): bool
+    {
+        return $this->getHeader($name) !== null;
+    }
+
+    public function withStatus(int $statusCode): self
+    {
+        return new self($statusCode, $this->headers, $this->body);
+    }
+
+    public function withBody(string $body): self
+    {
+        return new self($this->statusCode, $this->headers, $body);
+    }
+
     public function send(): void
     {
         http_response_code($this->statusCode);
